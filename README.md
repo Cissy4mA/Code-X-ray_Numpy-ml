@@ -61,10 +61,12 @@ code-x-ray/
 ## 三、一键部署（队友照做即可跑起来）
 
 ```bash
-cd code-x-ray
+git clone https://github.com/Cissy4mA/Code-X-ray_Numpy-ml.git
+cd Code-X-ray_Numpy-ml
 cp .env.example .env        # 按需改 MySQL 账号；国内网络改 HF_ENDPOINT 镜像
 bash scripts/deploy.sh
 ```
+> 把上面这串命令直接丢给 agent,它会自己 clone → 建 venv → 装依赖 → 建库表 → 导入数据 → 启动。
 
 `deploy.sh` 会：建 venv → 装依赖 → 建库表 →
 **从 numpy-ml 自动导入数据**（无需准备数据库，与组长导入流程完全一致）→ 启动后端。
