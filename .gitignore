@@ -1,0 +1,26 @@
+# 虚拟环境与缓存
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# 密钥与环境
+.env
+*.local
+
+# 工具/系统
+.DS_Store
+.workbuddy/
+
+# 数据库导出 dump（体积大，按需本地生成，不进版本库）
+data/*.sql
+
+# 模型权重（sentence-transformers 首次运行自动下载，不进版本库）
+models/
+.cache/
+*~
+
+# 前端构建产物（若有）
+node_modules/
+dist/

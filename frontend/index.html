@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh" data-page-node-id="ZaJfRmAs9FLfN2cJ0ciY2H">
+<head data-page-node-id="GLeE7zvR62qm5gALdWz9QA">
+<meta charset="utf-8" data-page-node-id="f6JdkAdRFPUKXkgwFZnGWr">
+<title>Code X-Ray</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+ body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:1100px;margin:24px auto;padding:0 16px;color:#1a1a1a;line-height:1.5}
+ h1{font-size:22px;margin-bottom:6px} h2{font-size:16px;margin-top:28px;border-bottom:1px solid #eee;padding-bottom:6px}
+ .sub{color:#666;font-size:13px;margin:0 0 4px}
+ input,select,textarea{font-family:monospace;font-size:13px;padding:8px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box}
+ input[type=text],input[type=number],select{width:100%}
+ textarea{width:100%;height:120px}
+ button{margin-top:8px;padding:8px 14px;border:0;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;font-size:13px}
+ button.alt{background:#16a34a} button.danger{background:#dc2626} button.ghost{background:#fff;color:#2563eb;border:1px solid #2563eb}
+ button:disabled{opacity:.5;cursor:not-allowed}
+ .row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+ .row>div{flex:1;min-width:140px}
+ .card{border:1px solid #e1e4e8;border-radius:8px;padding:12px;margin-top:10px;cursor:pointer;transition:.15s}
+ .card:hover{border-color:#2563eb;background:#f8faff}
+ .card.active{border-color:#2563eb;background:#eef4ff}
+ .meta{color:#666;font-size:12px}
+ .score{font-size:12px;color:#2563eb;margin:4px 0}
+ .tag{display:inline-block;background:#eef2ff;color:#3730a3;border-radius:4px;padding:1px 6px;font-size:11px;margin:2px 4px 0 0}
+ .tag.m{background:#fef3c7;color:#92400e}
+ pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;font-size:12px;white-space:pre-wrap}
+ .modules{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+ .mod{background:#f1f5f9;border-radius:6px;padding:4px 10px;font-size:12px;color:#334155;cursor:pointer}
+ .mod:hover{background:#dbeafe}
+ .detail{border:1px solid #2563eb;background:#f8faff;border-radius:8px;padding:14px;margin-top:10px}
+ .kv{margin:6px 0;font-size:13px}
+ .kv b{display:inline-block;width:90px;color:#475569}
+ .hidden{display:none}
+ #importStatus{font-size:12px;color:#16a34a;margin-top:6px}
+ .tabs{display:flex;gap:4px;border-bottom:1px solid #e1e4e8;margin:10px 0 0;flex-wrap:wrap}
+ .tab{padding:6px 12px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent}
+ .tab.active{border-color:#2563eb;color:#2563eb;font-weight:600}
+ .tab:hover{background:#f8faff}
+ .bar{height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin:3px 0}
+ .bar>div{height:100%;background:#2563eb}
+ .mode-btn{background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;padding:6px 12px;margin-right:4px}
+ .mode-btn.active{background:#2563eb;color:#fff;border-color:#2563eb}
+ .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:10px}
+ .stat{border:1px solid #e1e4e8;border-radius:8px;padding:10px;text-align:center}
+ .stat .num{font-size:20px;font-weight:700;color:#2563eb}
+ .stat .lab{font-size:12px;color:#666}
+ .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+ .panel{border:1px solid #e1e4e8;border-radius:8px;padding:12px;margin-top:10px}
+ .panel h3{font-size:14px;margin:0 0 8px}
+ .placeholder{color:#94a3b8;font-size:13px;text-align:center;padding:20px}
+ .compare-slot{border:1px dashed #cbd5e1;border-radius:6px;padding:8px;min-height:60px;background:#f8fafc}
+ .small-btn{padding:4px 8px;font-size:12px;margin-top:0}
+ .code-actions{display:flex;gap:6px;margin:6px 0}
+ .hint{color:#94a3b8;font-size:12px;margin-top:4px}
+ .score-row{display:flex;align-items:center;gap:8px;font-size:12px;margin:2px 0}
+ .score-row .label{width:60px;color:#666}
+ .score-row .bar{flex:1;height:8px}
+ .tree{padding-left:16px;border-left:2px solid #e2e8f0;margin-left:6px}
+</style>
+</head>
+<body data-page-node-id="Qqmpz4cdb5M5acz6I1QiBC">
+<h1 data-page-node-id="a8xWFHwY8bkk5bCNk9rkCp">Code X-Ray</h1>
+
+<!-- 1. Overview / 概览 -->
+<h2 data-page-node-id="x1">1. Overview / 概览</h2>
+<div class="stats">
+  <div class="stat"><div class="num" id="sProjects">-</div><div class="lab">Projects / 项目数</div></div>
+  <div class="stat"><div class="num" id="sFiles">-</div><div class="lab">Files / 文件数</div></div>
+  <div class="stat"><div class="num" id="sChunks">-</div><div class="lab">Chunks / 块数</div></div>
+  <div class="stat"><div class="num" id="sModules">-</div><div class="lab">Modules / 模块数</div></div>
+  <div class="stat"><div class="num" id="sClasses">-</div><div class="lab">Algorithms / 算法类数</div></div>
+</div>
+<p class="meta" id="dbStats" style="margin-top:10px">Checking database status… / 正在检查数据库状态…</p>
+
+<!-- 2. Import / 导入 -->
+<h2>2. Import / 导入</h2>
+<p class="meta">Currently numpy-ml is used as the sample kernel; later users will be able to paste any GitHub repo URL to import. / 当前以 numpy-ml 作为示例内核；后续支持用户粘贴任意 GitHub 仓库 URL 导入。</p>
+<div class="row">
+  <div style="flex:2"><input type="text" id="customRepo" placeholder="https://github.com/owner/repo（custom repo import window, TODO / 自定义仓库导入窗口，待实现）" disabled></div>
+  <div style="flex:1"><button class="alt" onclick="importKernel()">Import sample kernel (numpy-ml) / 导入示例内核</button></div>
+  <div style="max-width:110px"><button class="danger" onclick="clearDb()">Clear DB / 清空数据库</button></div>
+</div>
+<div id="importStatus">Not imported yet. Click the button above to start (needs backend /api/index_repo). / 尚未导入。点击上方按钮开始（需后端实现 /api/index_repo）。</div>
+<div>
+  <div class="meta" style="margin-top:10px">Sample kernel main modules (used for layered retrieval after import): / 示例内核主要模块（导入后按此分层检索）：</div>
+  <div class="modules" id="modList"><span class="mod">Import to see modules / 导入后显示模块</span></div>
+</div>
+
+<!-- 3. Search / 检索 -->
+<h2 data-page-node-id="x3">3. Search / 检索</h2>
+
+<!-- 3.1 Module Search / 模块搜索 -->
+<h3>3.1 Module Search / 模块搜索</h3>
+<p class="meta">Search the 13 algorithm modules. Results show module summaries like a README, no code. / 搜索 13 个算法模块，结果以 README 风格展示模块摘要，不显示代码。</p>
+<div class="row">
+  <div style="flex:1"><input type="text" id="moduleQuery" placeholder="e.g. neural network, reinforcement learning / 例如 神经网络、强化学习"></div>
+  <div style="max-width:120px"><button onclick="doModuleSearch()">Search / 检索</button></div>
+</div>
+<div id="moduleResult" style="margin-top:10px"></div>
+
+<!-- 3.2 Algorithm Search / 算法搜索 -->
+<h3>3.2 Algorithm Search / 算法搜索</h3>
+<p class="meta">Search inside a module (or all modules) and limit results to top-k. / 在指定模块或全部模块中搜索算法，限制返回数量。</p>
+<div class="row">
+  <div style="max-width:180px"><label class="meta">Module / 模块</label><select id="fModule">
+    <option value="">All / 全部</option>
+  </select></div>
+  <div style="flex:1"><label class="meta">Query / 查询</label><input type="text" id="query" placeholder="e.g. which algorithm estimates params via EM / 用 EM 估参数的算法"></div>
+  <div style="max-width:90px"><label class="meta">Top-K (1-10)</label><input type="number" id="topk" value="5" min="1" max="10"></div>
+  <div style="max-width:120px"><button onclick="doSearch()" data-page-node-id="x5">Search / 检索</button></div>
+</div>
+<div id="searchResult" data-page-node-id="x6" style="margin-top:10px"></div>
+
+<!-- 4. Learn / 学习 -->
+<h2 data-page-node-id="x7">4. Learn / 学习</h2>
+<div class="tabs" id="learnTabs">
+  <span class="tab active" onclick="showLearnTab('math')">Math Card / 数学卡片</span>
+  <span class="tab" onclick="showLearnTab('compare')">Compare / 算法对比</span>
+  <span class="tab" onclick="showLearnTab('path')">Path / 学习路径</span>
+  <span class="tab" onclick="showLearnTab('rec')">Recommend / 相似推荐</span>
+  <span class="tab" onclick="showLearnTab('graph')">Call Graph / 调用图</span>
+</div>
+<div id="learnBox" class="panel">
+  <div id="learnMath">
+    <p class="meta">Click a search result above to view its structured info: math methods, key params, math description, references and reference edges. / 点击上方检索结果，在此查看该算法的结构化信息：数学方法、关键参数、数学描述、参考文献与引用关系。</p>
+    <div id="detail" class="hidden"></div>
+    <div id="detailEmpty" class="meta">（No algorithm selected. Click a result card after searching to expand the learn card. / 未选择算法。检索后点击结果卡片即可展开学习卡片。）</div>
+  </div>
+  <div id="learnCompare" class="hidden">
+    <p class="meta">Pick two algorithms to compare their params, assumptions and math descriptions side by side. / 选择两个算法并排对比其参数、假设与数学描述。</p>
+    <div class="two-col">
+      <div>
+        <div class="meta">Left / 左侧</div>
+        <div id="compareLeft" class="compare-slot">Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加</div>
+      </div>
+      <div>
+        <div class="meta">Right / 右侧</div>
+        <div id="compareRight" class="compare-slot">Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加</div>
+      </div>
+    </div>
+    <div id="compareTable" class="hidden" style="margin-top:10px"></div>
+  </div>
+  <div id="learnPath" class="hidden">
+    <p class="meta">Auto-generate the prerequisite learning order around one algorithm. / 围绕一个算法自动排出前置概念的学习顺序。</p>
+    <div id="pathTree" class="tree placeholder">Select an algorithm to generate its learning path (backend TODO) / 选择一个算法后生成学习路径（后端待实现）</div>
+  </div>
+  <div id="learnRec" class="hidden">
+    <p class="meta">Recommend similar algorithms by module / family / co-reference. / 基于模块 / 算法族 / 引用共现为当前算法推荐相似算法。</p>
+    <div id="recList" class="placeholder">Select an algorithm to see recommendations (backend TODO) / 选择一个算法后显示相似推荐（后端待实现）</div>
+  </div>
+  <div id="learnGraph" class="hidden">
+    <p class="meta">Visualize inheritance, call and reference relations between classes. / 可视化展示类与类之间的继承、调用与引用关系。</p>
+    <div id="callGraph" class="placeholder">Select an algorithm to render its call graph (backend TODO) / 选择一个算法后渲染调用关系图（后端待实现）</div>
+  </div>
+</div>
+
+<script>
+const BASE="http://127.0.0.1:8000";
+let currentResults=[];
+let selectedItem=null;
+let compareItems=[];
+let allModules=[];
+
+async function loadStats(){
+  try{
+    const r=await fetch(BASE+"/api/stats"); const s=await r.json();
+    document.getElementById("sProjects").innerText=s.projects??0;
+    document.getElementById("sFiles").innerText=s.files??0;
+    document.getElementById("sChunks").innerText=s.chunks??0;
+    const mods=(s.modules||[]).filter(m=>m);
+    document.getElementById("sModules").innerText=mods.length||"-";
+    document.getElementById("sClasses").innerText=s.classes??"-";
+    document.getElementById("dbStats").innerText="";
+    allModules=mods;
+    renderModCloud(mods);
+    fillModuleSelect(mods);
+  }catch(e){ document.getElementById("dbStats").innerText=""; }
+}
+loadStats();
+
+function renderModCloud(mods){
+  const box=document.getElementById("modList");
+  if(!mods.length){ box.innerHTML='<span class="mod">Import to see modules / 导入后显示模块</span>'; return; }
+  box.innerHTML=mods.map(m=>`<span class="mod" data-mod="${m}">${m}</span>`).join("");
+  bindModCloud();
+}
+
+function fillModuleSelect(mods){
+  const sel=document.getElementById("fModule");
+  const cur=sel.value;
+  sel.innerHTML='<option value="">All / 全部</option>'+mods.map(m=>`<option>${m}</option>`).join("");
+  if(mods.includes(cur)) sel.value=cur;
+}
+
+// module cloud click auto-fills filter
+function bindModCloud(){
+  document.querySelectorAll('#modList .mod').forEach(m=>{
+    m.onclick=()=>{ document.getElementById('fModule').value=m.dataset.mod; };
+  });
+}
+bindModCloud();
+
+async function importKernel(){
+  const st=document.getElementById("importStatus");
+  st.style.color="#92400e"; st.innerText="Importing numpy-ml (clone + class-level chunking + embedding)… / 正在导入 numpy-ml（clone + 类级切分 + 嵌入）…";
+  try{
+    const r=await fetch(BASE+"/api/index_repo",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({})
+    });
+    const j=await r.json();
+    st.style.color="#16a34a"; st.innerText="Import done / 导入完成："+JSON.stringify(j);
+    await loadStats();
+  }catch(e){ st.style.color="#dc2626"; st.innerText="Import failed / 导入失败："+e.message; }
+}
+async function clearDb(){
+  if(!confirm('Clear the code_x_ray database? / 确定清空 code_x_ray 数据库？')) return;
+  const r=await fetch(BASE+"/api/reset",{method:"POST"}); const j=await r.json();
+  document.getElementById("importStatus").innerText="Cleared / 已清空："+JSON.stringify(j);
+  await loadStats();
+}
+
+
+async function doModuleSearch(){
+  const q=document.getElementById("moduleQuery").value.trim().toLowerCase();
+  const box=document.getElementById("moduleResult");
+  box.innerHTML="<i class='meta'>Loading modules… / 加载模块中…</i>";
+  try{
+    const r=await fetch(BASE+"/api/modules");
+    const j=await r.json();
+    let mods=j.modules||[];
+    if(q){
+      mods=mods.filter(m=>
+        m.name.toLowerCase().includes(q) ||
+        (m.family||"").toLowerCase().includes(q) ||
+        (m.description||"").toLowerCase().includes(q) ||
+        (m.samples||[]).some(s=>s.toLowerCase().includes(q))
+      );
+    }
+    if(!mods.length){ box.innerHTML="<i class='meta'>No matching modules / 无匹配模块</i>"; return; }
+    box.innerHTML=mods.map(m=>{
+      const readmeHtml = window.marked && m.readme ? marked.parse(m.readme) : `<div class="meta">${m.description}</div>`;
+      return `
+      <div class="card" onclick="selectModule('${m.name}')">
+        <div><span class="tag">${m.family||"Module"}</span><b>${m.name}</b></div>
+        <div class="meta">Files ${m.file_count} · Classes ${m.class_count} · Functions ${m.function_count}</div>
+        <div class="readme" style="margin-top:8px">${readmeHtml}</div>
+      </div>
+    `}).join("");
+    if(window.renderMathInElement){ renderMathInElement(box,{delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}]}); }
+  }catch(e){ box.innerHTML="<i class='meta'>Module search failed / 模块搜索失败："+e.message+"</i>"; }
+}
+
+function selectModule(name){
+  document.getElementById("fModule").value=name;
+  document.getElementById("query").focus();
+  document.getElementById("searchResult").scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+async function doSearch(){
+  const query=document.getElementById("query").value.trim();
+  if(!query){ alert("Please enter a query / 请输入检索内容"); return; }
+  const body={
+    query,
+    top_k:+document.getElementById("topk").value,
+    module:document.getElementById("fModule").value,
+    family:"",
+    task:""
+  };
+  const box=document.getElementById("searchResult"); box.innerHTML="<i class='meta'>Searching… / 检索中…</i>";
+  try{
+    const r=await fetch(BASE+"/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const j=await r.json();
+    currentResults=j.results||[];
+    if(!currentResults.length){ box.innerHTML="<i class='meta'>No results / 无结果</i>"; return; }
+    box.innerHTML="";
+    currentResults.forEach((x,i)=>{
+      const el=document.createElement("div");
+      el.className="card"; el.dataset.idx=i;
+      const maxScore=Math.max(currentResults[0].fused||0, 0.0001);
+      el.innerHTML=`<div><span class="tag">${x.type||""}</span><b>${x.entity||"(unnamed / 未命名)"}</b> <span class="meta">${x.path||""}:${x.lines||""}</span></div>`+
+        `<div class="score-row"><span class="label">fused</span><div class="bar"><div style="width:${Math.min(100,((x.fused||0)/maxScore)*100)}%"></div></div><span>${(x.fused??"?").toString().slice(0,5)}</span></div>`+
+        `<div class="score-row"><span class="label">keyword</span><div class="bar"><div style="width:${Math.min(100,((x.keyword||0)/maxScore)*100)}%;background:#16a34a"></div></div><span>${(x.keyword??"?").toString().slice(0,5)}</span></div>`+
+        `<div class="score-row"><span class="label">semantic</span><div class="bar"><div style="width:${Math.min(100,((x.semantic||0)/maxScore)*100)}%;background:#9333ea"></div></div><span>${(x.semantic??"?").toString().slice(0,5)}</span></div>`+
+        `<pre>${escapeHtml(x.code||"").slice(0,260)}${(x.code||"").length>260?'…':''}</pre>`+
+        `<button class="small-btn ghost" onclick="event.stopPropagation();addCompare(${i})">+ Compare / 对比</button>`;
+      el.onclick=()=>{ document.querySelectorAll('.card').forEach(c=>c.classList.remove('active')); el.classList.add('active'); showDetail(x); };
+      box.appendChild(el);
+    });
+  }catch(e){ box.innerHTML="<i class='meta'>Search failed / 检索失败："+e.message+"</i>"; }
+}
+
+function showDetail(x){
+  selectedItem=x;
+  const d=document.getElementById("detail"); const e=document.getElementById("detailEmpty");
+  e.classList.add("hidden"); d.classList.remove("hidden");
+  const tags=(x.math_methods||[]).map(m=>`<span class="tag m">${m}</span>`).join("")||"<span class='meta'>（backend TODO: extract math method keywords from docstring / 待后端补全：从 docstring 抽取数学方法关键词）</span>";
+  const params=(x.params||[]).map(p=>`<span class="tag">${p}</span>`).join("")||"<span class='meta'>（backend TODO: extract params from __init__ / 待后端补全：从 __init__ 抽取参数）</span>";
+  const refs=(x.references||[]).join(", ")||"（backend TODO: extract references / papers from docstring / 待后端补全：从 docstring 抽取参考文献/论文链接）";
+  const edges=(x.ref_edges||[]).join(", ")||"（backend TODO: resolve import / inheritance / call edges / 待后端补全：从 import / 继承 / 调用解析引用关系）";
+  const math=escapeHtml(x.docstring_math||x.docstring||x.code||"（backend TODO: math description / 待后端补全数学描述）");
+  d.innerHTML=
+    `<div class="code-actions"><button class="small-btn" onclick="copyCode()">Copy Code / 复制代码</button><button class="small-btn ghost" onclick="addCompareByItem(selectedItem)">+ Add to Compare / 加入对比</button></div>`+
+    `<div class="kv"><b>Name / 名称</b>${x.entity||"(unnamed / 未命名)"}</div>`+
+    `<div class="kv"><b>Module / 模块</b>${x.module||x.path||"—"}</div>`+
+    `<div class="kv"><b>Family / 算法族</b>${x.family||"—"}</div>`+
+    `<div class="kv"><b>Task / 任务</b>${x.task||"—"}</div>`+
+    `<div class="kv"><b>Path / 路径</b><span class="meta">${x.path||"—"}:${x.lines||""}</span></div>`+
+    `<div class="kv"><b>Math Methods / 数学方法</b><br>${tags}</div>`+
+    `<div class="kv"><b>Key Params / 关键参数</b><br>${params}</div>`+
+    `<div class="kv"><b>Math Description / 数学描述</b><pre id="mathBlock">${math}</pre></div>`+
+    `<div class="kv"><b>References / 参考文献</b>${refs}</div>`+
+    `<div class="kv"><b>Reference Edges / 引用关系</b>${edges}</div>`+
+    `<div class="kv"><b>Source / 源码</b><pre id="codeBlock">${escapeHtml(x.code||"（no source / 无源码）")}</pre></div>`;
+  if(window.renderMathInElement){ renderMathInElement(d,{delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}]}); }
+}
+function copyCode(){ const c=document.getElementById('codeBlock'); if(c){ navigator.clipboard.writeText(c.innerText).then(()=>alert('Copied to clipboard / 已复制到剪贴板')); } }
+
+function showLearnTab(name){
+  ['math','compare','path','rec','graph'].forEach(id=>document.getElementById('learn'+cap(id)).classList.add('hidden'));
+  document.getElementById('learn'+cap(name)).classList.remove('hidden');
+  document.querySelectorAll('#learnTabs .tab').forEach((t,i)=>t.classList.toggle('active',['math','compare','path','rec','graph'][i]===name));
+  if(name==='path') renderPath();
+  if(name==='rec') renderRec();
+  if(name==='graph') renderGraph();
+}
+function cap(s){ return s[0].toUpperCase()+s.slice(1); }
+
+function addCompare(idx){ addCompareByItem(currentResults[idx]); }
+function addCompareByItem(item){
+  if(!item){ alert('Please select a result first / 请先选择一个结果'); return; }
+  if(compareItems.find(c=>c.entity===item.entity&&c.path===item.path)){ alert('Already exists / 已存在'); return; }
+  if(compareItems.length>=2) compareItems.shift();
+  compareItems.push(item);
+  renderCompare();
+  showLearnTab('compare');
+}
+function renderCompare(){
+  const leftSlot=document.getElementById('compareLeft');
+  const rightSlot=document.getElementById('compareRight');
+  const table=document.getElementById('compareTable');
+  if(!compareItems.length){ leftSlot.innerHTML='Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加'; rightSlot.innerHTML='Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加'; table.classList.add('hidden'); return; }
+  leftSlot.innerHTML=compareItems[0]?`<b>${compareItems[0].entity}</b><div class="meta">${compareItems[0].path}:${compareItems[0].lines}</div>`:'Add to left / 点击左侧添加';
+  rightSlot.innerHTML=compareItems[1]?`<b>${compareItems[1].entity}</b><div class="meta">${compareItems[1].path}:${compareItems[1].lines}</div>`:'Add to right / 点击右侧添加';
+  if(compareItems.length===2){
+    const a=compareItems[0], b=compareItems[1];
+    table.classList.remove('hidden');
+    table.innerHTML=
+      `<table style="width:100%;font-size:13px;border-collapse:collapse">`+
+      `<tr style="border-bottom:1px solid #e2e8f0"><th style="text-align:left;padding:6px">Dimension / 维度</th><th>${a.entity}</th><th>${b.entity}</th></tr>`+
+      `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px">Module / 模块</td><td>${a.module||a.path||'—'}</td><td>${b.module||b.path||'—'}</td></tr>`+
+      `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px">Family / 算法族</td><td>${a.family||'—'}</td><td>${b.family||'—'}</td></tr>`+
+      `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px">Task / 任务</td><td>${a.task||'—'}</td><td>${b.task||'—'}</td></tr>`+
+      `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px">Math Methods / 数学方法</td><td>${(a.math_methods||[]).join(', ')||'TODO'}</td><td>${(b.math_methods||[]).join(', ')||'TODO'}</td></tr>`+
+      `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px">Key Params / 关键参数</td><td>${(a.params||[]).join(', ')||'TODO'}</td><td>${(b.params||[]).join(', ')||'TODO'}</td></tr>`+
+      `<tr><td style="padding:6px">Math Description / 数学描述</td><td><pre style="white-space:pre-wrap">${escapeHtml(a.docstring_math||a.code||'—')}</pre></td><td><pre style="white-space:pre-wrap">${escapeHtml(b.docstring_math||b.code||'—')}</pre></td></tr>`+
+      `</table>`;
+  }
+}
+
+function renderPath(){
+  const box=document.getElementById('pathTree');
+  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to generate its learning path (backend TODO) / 选择一个算法后生成学习路径（后端待实现）</div>'; return; }
+  const fam=selectedItem.family||'Unknown family / 未知算法族';
+  const mod=selectedItem.module||selectedItem.path?.split('/')[0]||'Unknown module / 未知模块';
+  box.innerHTML=
+    `<div><b>${selectedItem.entity}</b></div>`+
+    `<div class="tree">`+
+    `<div>Prerequisites: Linear Algebra / Probability / Optimization / 前置：线性代数 / 概率基础 / 优化方法</div>`+
+    `<div class="tree">→ ${fam} basics: loss function + parameter estimation / ${fam} 基础：损失函数 + 参数估计</div>`+
+    `<div class="tree">→ ${mod} module: survey of sibling algorithms / ${mod} 模块：同类算法族综述</div>`+
+    `<div class="tree">→ <b>${selectedItem.entity}</b>: concrete implementation & code / ${selectedItem.entity}：具体实现与代码</div>`+
+    `</div>`+
+    `<p class="hint">Note: a real path needs the backend to parse docstring + reference edges; this is a sketch. / 注：真实路径需后端解析 docstring 与引用边自动生成；当前为示意结构。</p>`;
+}
+function renderRec(){
+  const box=document.getElementById('recList');
+  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to see recommendations (backend TODO) / 选择一个算法后显示相似推荐（后端待实现）</div>'; return; }
+  box.innerHTML=
+    `<div class="card"><b>Same-module rec / 同模块推荐</b><div class="meta">Other algorithms in the same ${selectedItem.module||'—'} module (backend TODO) / 与 ${selectedItem.entity} 同属 ${selectedItem.module||'—'} 的其他算法（后端待实现）</div></div>`+
+    `<div class="card"><b>Same-family rec / 同算法族推荐</b><div class="meta">Comparable algorithms in the same ${selectedItem.family||'—'} family (backend TODO) / 同属 ${selectedItem.family||'—'} 的可比算法（后端待实现）</div></div>`+
+    `<div class="card"><b>Co-reference rec / 引用共现推荐</b><div class="meta">Utility functions / base classes often referenced with ${selectedItem.entity} (backend TODO) / 常与 ${selectedItem.entity} 一起被引用的工具函数 / 基类（后端待实现）</div></div>`;
+}
+function renderGraph(){
+  const box=document.getElementById('callGraph');
+  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to render its call graph (backend TODO) / 选择一个算法后渲染调用关系图（后端待实现）</div>'; return; }
+  box.innerHTML=
+    `<pre style="text-align:left">${selectedItem.entity}\n├── inherits ← (backend TODO / 待后端解析)\n├── calls ← (backend TODO / 待后端解析)\n└── called-by ← (backend TODO / 待后端解析)</pre>`+
+    `<p class="hint">Note: a real call graph needs the backend to resolve import / class / function edges; placeholder shown. / 注：真实调用图需后端解析 import / class / function 引用边；当前为占位示意。</p>`;
+}
+
+function escapeHtml(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+</script>
+</body>
+</html>

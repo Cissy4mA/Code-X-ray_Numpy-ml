@@ -1,0 +1,43 @@
+{
+  "_说明": "学习板块内容由分工2（两人）维护。modules 下每个 key 是模块名（与 algorithms 表的 module 字段一致）。删除本示例即可。",
+  "_template": {
+    "neural_nets": {
+      "family": "Neural Networks",
+      "cards": [
+        {"algorithm": "MLP", "math": "交叉熵损失与梯度推导", "formula": "L = -sum y log p", "summary": "多层感知机的反向传播"}
+      ],
+      "compare": [
+        {"algorithm": "MLP", "pros": "...", "cons": "...", "use_when": "..."}
+      ],
+      "path": [
+        {"step": "感知机", "why": "理解线性可分"},
+        {"step": "MLP", "why": "引入非线性"}
+      ],
+      "call_graph": {"nodes": ["MLP", "Layer", "Activation"], "edges": [["MLP", "Layer"], ["Layer", "Activation"]]}
+    }
+  },
+  "modules": {
+    "neural_nets": {
+      "family": "Neural Networks",
+      "cards": [
+        {
+          "algorithm": "示例：MLP",
+          "math": "在此填数学原理（如交叉熵损失与梯度推导）",
+          "formula": "L = -∑ y·log p",
+          "summary": "在此填一句话说明这个算法在干什么"
+        }
+      ],
+      "compare": [
+        {"algorithm": "示例：MLP", "pros": "表达能力强", "cons": "易过拟合", "use_when": "数据量充足时"}
+      ],
+      "path": [
+        {"step": "示例：感知机", "why": "理解线性可分与梯度下降"},
+        {"step": "示例：MLP", "why": "引入非线性与反向传播"}
+      ],
+      "call_graph": {
+        "nodes": ["MLP", "Layer", "Activation"],
+        "edges": [["MLP", "Layer"], ["Layer", "Activation"]]
+      }
+    }
+  }
+}
