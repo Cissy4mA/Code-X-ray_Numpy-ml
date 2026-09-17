@@ -41,13 +41,12 @@ code-x-ray/
 **每人改自己的文件，合并时几乎零冲突：**
 | 分工 | 负责人 | 文件 |
 |------|--------|------|
-| 检索精度提升 | 你（组长） | `backend/retrieval.py`（权重/重排）、`backend/parser.py` 的 `embed()` |
+| 检索精度提升 | 1 人 | `backend/retrieval.py`（权重/重排）、`backend/parser.py` 的 `embed()` |
 | 学习板块开发 | 2 人 | `backend/learn.py` + `data/learn_content.json` |
 | 检索评估与测试 | 1 人 | `backend/eval_test.py` |
 | 页面设计美化 | 1 人 | `frontend/index.html`（视觉/布局） |
 | 检索结果可视化 | 1 人 | `frontend/index.html`（Search 页） |
 | 学习板块可视化 | 1 人 | `frontend/index.html`（Learn 页） |
-| 统筹监督 | 你 | 跨板块检查 + 接口对齐 |
 
 ---
 
