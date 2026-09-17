@@ -88,3 +88,27 @@ git push origin feat/<你的分工>
 - PR 标题：`feat: <分工> <一句话说明>`。
 - PR 描述写清：改了什么、本地怎么验证（如 `bash scripts/run.sh` 后访问哪个接口/页面）。
 - 组长 review 通过后合并；合并方式用 **Squash and merge**，保持 main 历史干净。
+
+---
+
+## 七、组长本地验证与合并（你怎么做）
+
+组员提 PR 后，组长（你）在本机把分支跑起来看真实效果，确认没问题再合并。这个 agent 就运行在你的电脑上，所以「部署到本地」= 你浏览器开 `localhost` 就能看。
+
+**前置条件**：你电脑的 **MySQL 必须在运行**（XAMPP 图形界面点 Start 即可；残留 pid 权限问题用 GUI 启动通常能绕过）。MySQL 没开，后端跑不起来、也没法从 numpy-ml 导入。
+
+**验证步骤（组长交给 agent 一句话即可，如「feat/learn 好了，帮我跑」）：**
+```bash
+cd Code-X-ray_Numpy-ml
+git fetch origin
+git checkout feat/<分工>          # 切到组员分支
+cp .env.example .env              # 若还没配
+bash scripts/deploy.sh            # 自动建库 + 从 numpy-ml 导入 + 启动
+# 浏览器开 http://127.0.0.1:8000 看效果
+```
+
+**重要：不要覆盖现有稳定服务。** 验证分支时另开端口（如 `uvicorn backend.app:app --port 8001`），别动你现在 8000 上跑的 main 服务，免得待验分支崩溃把你现有系统带挂。
+
+**确认 OK 后合并：**
+- 在 GitHub PR 页面点 Merge（Squash and merge）；或本地 `git checkout main && git merge feat/<分工> && git push`，都能合进 main，全员即见。
+- 验证不通过：在 PR 里评论打回，让组员改完重提，不要合并。
