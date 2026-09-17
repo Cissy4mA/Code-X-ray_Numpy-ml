@@ -30,7 +30,7 @@ code-x-ray/
 │   └── test_demo.py
 ├── data/
 │   ├── learn_content.json  # 学习板块内容模板（分工2 维护）
-│   └── code_x_ray.sql      # （可选）数据库 dump，本地生成，不进版本库
+│   └── code_x_ray.sql      # （可选·非必须）数据库 dump，仅用于加速部署；队友无需准备，deploy.sh 会自动从 numpy-ml 导入
 ├── docs/                   # 项目文档（简介/分工/设计）
 ├── sample/
 ├── requirements.txt
@@ -68,14 +68,16 @@ bash scripts/deploy.sh
 ```
 
 `deploy.sh` 会：建 venv → 装依赖 → 建库表 →
-**若存在 `data/code_x_ray.sql` 则恢复数据，否则从 numpy-ml 重新导入** → 启动后端。
+**从 numpy-ml 自动导入数据**（无需准备数据库，与组长导入流程完全一致）→ 启动后端。
+> 部署加速（可选）：若仓库里存在 `data/code_x_ray.sql`，脚本会优先恢复它跳过导入；
+> 但**队友不用管这个文件**——没有它也能跑，只是首次导入会多花几分钟下载模型+编码。
 启动后访问 http://127.0.0.1:8000 。
 
 日常只启动（已部署过）：`bash scripts/run.sh`
 
-导出数据库 dump（组长在有数据的机器上执行，便于分发）：
+（可选）导出数据库 dump 加速队友部署——**非必须**，仅当你想省去队友首次导入时间时执行：
 ```bash
-bash scripts/export_db.sh   # 生成 data/code_x_ray.sql
+bash scripts/export_db.sh   # 生成 data/code_x_ray.sql，本地用，不进版本库
 ```
 
 ---
