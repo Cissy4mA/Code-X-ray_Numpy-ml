@@ -402,7 +402,7 @@ def debug_chunks():
 
 @app.post("/api/debug/search")
 def debug_search(req: SearchReq):
-    """把一次检索拆开给你看：query 向量、每个候选 chunk 的关键词分/余弦分/融合分/向量头。"""
+    """把一次检索拆开展示：query 向量、每个候选 chunk 的关键词分/余弦分/融合分/向量头。"""
     results, qvec = _rank(req)
     return {
         "query": req.query,

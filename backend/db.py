@@ -1,7 +1,7 @@
 """XAMPP MySQL 连接与建表（零额外配置，root 空密码）。
 
 这就是「前端 ↔ SQL」链路里最底层的那根线：
-后端 FastAPI 通过 pymysql 连到你本机 XAMPP 的 MySQL，
+后端 FastAPI 通过 pymysql 连到本地 XAMPP 的 MySQL，
 所有 chunk / 文件 / 项目元数据都落在这三张表里。
 
 v2 扩展：为支持 ML 算法类级切分 + 检索过滤 + 学习型展示，
@@ -11,7 +11,7 @@ references / docstring_math / complexity / ref_edges / call_edges 等列。
 import os
 import pymysql
 
-# 支持环境变量覆盖，方便队友按自己的 XAMPP 配置调整（默认值针对本机 XAMPP）
+# 支持环境变量覆盖，方便队友按本地 XAMPP 配置调整（默认值针对本机 XAMPP）
 HOST = os.environ.get("MYSQL_HOST", "127.0.0.1")        # XAMPP MySQL 监听地址
 USER = os.environ.get("MYSQL_USER", "root")            # XAMPP 默认账号
 PASSWORD = os.environ.get("MYSQL_PASSWORD", "")        # XAMPP 默认 root 空密码

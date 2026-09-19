@@ -1,6 +1,6 @@
 """检索核心：FULLTEXT 关键词 + 余弦语义 混合打分 → Top-K（支持 module/family/task 过滤）。
 
-归属：你（分工1 检索精度提升）拥有，是精度优化的核心改动区。
+这是检索精度（分工 1）的核心改动区。
 - 调 embedding 模型 / 切分策略：改 backend/parser.py 的 embed() 与 extract_chunks()
 - 调混合权重、加重排序：改本文件的 _rank()
 - 评估指标：见 backend/eval_test.py
@@ -120,7 +120,7 @@ def debug_chunks():
 
 
 def debug_search(req):
-    """把一次检索拆开给你看：query 向量、每个候选 chunk 的关键词分/余弦分/融合分/向量头。"""
+    """把一次检索拆开展示：query 向量、每个候选 chunk 的关键词分/余弦分/融合分/向量头。"""
     results, qvec = rank(req)
     return {
         "query": req.query,

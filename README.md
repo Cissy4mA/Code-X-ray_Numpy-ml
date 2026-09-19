@@ -14,11 +14,11 @@
 ```
 code-x-ray/
 ├── backend/                 # 后端（FastAPI）
-│   ├── app.py              # 装配入口 + 元接口（组长拥有，只接线）
+│   ├── app.py              # 装配入口 + 元接口（只接线）
 │   ├── db.py               # 数据库连接 + 建表（agent 维护，人不改）
 │   ├── parser.py           # 代码切分 + embedding（agent 维护，人不改）
 │   ├── index_pipeline.py   # 入库管线：粘贴代码 / 导入 GitHub 仓库（稳定）
-│   ├── retrieval.py        # 检索精度【分工1：你】核心改动区
+│   ├── retrieval.py        # 检索精度【分工1】核心改动区
 │   ├── learn.py            # 学习板块功能【分工2：两人】
 │   └── eval_test.py        # 检索评估与测试【分工3】
 ├── frontend/
@@ -39,7 +39,7 @@ code-x-ray/
 └── .gitignore
 ```
 
-**每人改自己的文件，合并时几乎零冲突：**
+**各分工改对应文件，合并时几乎零冲突：**
 | 分工 | 负责人 | 文件 |
 |------|--------|------|
 | 检索精度提升 | 1 人 | `backend/retrieval.py`（权重/重排）、`backend/parser.py` 的 `embed()` |
@@ -77,7 +77,7 @@ bash scripts/deploy.sh
 
 日常只启动（已部署过）：`bash scripts/run.sh`
 
-（可选）导出数据库 dump 加速队友部署——**非必须**，仅当你想省去队友首次导入时间时执行：
+（可选）导出数据库 dump 加速队友部署——**非必须**，仅当想省去队友首次导入时间时执行：
 ```bash
 bash scripts/export_db.sh   # 生成 data/code_x_ray.sql，本地用，不进版本库
 ```

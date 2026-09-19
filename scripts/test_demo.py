@@ -1,6 +1,6 @@
 """自动化验证脚本：跑通 入库 → 混合检索 → 带引用问答 全链路。
 
-不依赖前端，直接用 urllib 调后端接口，方便你确认整条链路真的通了。
+不依赖前端，直接用 urllib 调后端接口，方便确认整条链路真的通了。
 用法：code-x-ray/.venv/bin/python test_demo.py
 """
 import json

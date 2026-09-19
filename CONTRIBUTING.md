@@ -1,6 +1,6 @@
 # 协作与贡献指南（Code X-Ray 小组作业）
 
-本仓库是 **Cissy4mA/Code-X-ray_Numpy-ml**，`main` 为保护分支，**任何人不要直接 push 到 main**，一律走「开分支 → 改自己文件 → 提 PR → 组长合并」。
+本仓库是 **Cissy4mA/Code-X-ray_Numpy-ml**，`main` 为保护分支，**任何人不要直接 push 到 main**，一律走「开分支 → 改对应文件 → 提 PR → 组长合并」。
 
 ---
 
@@ -28,17 +28,17 @@ cd Code-X-ray_Numpy-ml
 # 2. 同步最新 main
 git checkout main && git pull origin main
 
-# 3. 开自己的分支（命名见第三节）
-git checkout -b feat/<你的分工>
+# 3. 开对应分工的分支（命名见第三节）
+git checkout -b feat/<对应分工>
 
 # 4. 本地跑起来（首次会自动从 numpy-ml 导入数据，无需准备数据库）
 cp .env.example .env
 bash scripts/deploy.sh
 
-# 5. 只改自己负责的文件，改完提交
-git add <你改的文件>
+# 5. 只改对应负责的文件，改完提交
+git add <改动的文件>
 git commit -m "feat: <分工> <做了什么>"
-git push origin feat/<你的分工>
+git push origin feat/<对应分工>
 
 # 6. 在 GitHub 提 PR 到 main，等组长 review 合并
 ```
@@ -57,7 +57,7 @@ git push origin feat/<你的分工>
 | 学习板块可视化 | `feat/frontend-learn` | `frontend/index.html`（Learn 页区块） |
 | 统筹 / 装配（组长） | `feat/main` | `backend/app.py`、`backend/db.py`、`README.md` 等 |
 
-**铁律：只碰上表自己的文件。** 装配层 `app.py` / `db.py` / `parser.py` / `index_pipeline.py` 由组长/agent 维护，组员不要改，否则合并必冲突。
+**铁律：只碰上表对应文件。** 装配层 `app.py` / `db.py` / `parser.py` / `index_pipeline.py` 由统筹/agent 维护，组员不要改，否则合并必冲突。
 
 ---
 
@@ -91,13 +91,13 @@ git push origin feat/<你的分工>
 
 ---
 
-## 七、组长本地验证与合并（你怎么做）
+## 七、组长本地验证与合并
 
-组员提 PR 后，组长（你）在本机把分支跑起来看真实效果，确认没问题再合并。这个 agent 就运行在你的电脑上，所以「部署到本地」= 你浏览器开 `localhost` 就能看。
+组员提 PR 后，组长在本机把分支跑起来看真实效果，确认没问题再合并。本机验证时，agent 直接在当前电脑部署，浏览器开 `localhost` 即可查看效果。
 
-**前置条件**：你电脑的 **MySQL 必须在运行**（XAMPP 图形界面点 Start 即可；残留 pid 权限问题用 GUI 启动通常能绕过）。MySQL 没开，后端跑不起来、也没法从 numpy-ml 导入。
+**前置条件**：本地 **MySQL 必须在运行**（XAMPP 图形界面点 Start 即可；残留 pid 权限问题用 GUI 启动通常能绕过）。MySQL 没开，后端跑不起来、也没法从 numpy-ml 导入。
 
-**验证步骤（组长交给 agent 一句话即可，如「feat/learn 好了，帮我跑」）：**
+**验证步骤（组长交给 agent 一句话即可，如「请验证 feat/learn 分支」）：**
 ```bash
 cd Code-X-ray_Numpy-ml
 git fetch origin
@@ -107,7 +107,7 @@ bash scripts/deploy.sh            # 自动建库 + 从 numpy-ml 导入 + 启动
 # 浏览器开 http://127.0.0.1:8000 看效果
 ```
 
-**重要：不要覆盖现有稳定服务。** 验证分支时另开端口（如 `uvicorn backend.app:app --port 8001`），别动你现在 8000 上跑的 main 服务，免得待验分支崩溃把你现有系统带挂。
+**重要：不要覆盖现有稳定服务。** 验证分支时另开端口（如 `uvicorn backend.app:app --port 8001`），别动当前 8000 上跑的 main 服务，免得待验分支崩溃把现有系统带挂。
 
 **确认 OK 后合并：**
 - 在 GitHub PR 页面点 Merge（Squash and merge）；或本地 `git checkout main && git merge feat/<分工> && git push`，都能合进 main，全员即见。

@@ -1,8 +1,8 @@
 """检索评估与测试保障。
 
-归属：分工3（检索评估与测试保障）拥有。
-- EVAL_QUERIES：评测查询集（你们按真实需求扩充，标注期望命中的模块/算法）
-- evaluate()：算 MRR 与 Hit@k，给「检索精度提升」（retrieval.py）量化背书
+这是检索评估与测试（分工 3）的负责范围。
+- EVAL_QUERIES：评测查询集（按真实需求扩充，标注期望命中的模块/算法）
+- evaluate()：算 MRR 与 Hit@k，给检索精度（retrieval.py）量化背书
 - smoke_test()：接口/数据连通性冒烟，保证演示时后端不挂
 """
 from types import SimpleNamespace

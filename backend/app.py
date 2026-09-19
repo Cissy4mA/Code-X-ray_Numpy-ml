@@ -1,11 +1,11 @@
 """Code X-Ray 后端装配入口（FastAPI）。
 
-归属：你（组长）拥有，只做「接线」，不写业务。
-- 检索精度：backend/retrieval.py（分工1）
-- 学习板块：backend/learn.py（分工2）
-- 评估测试：backend/eval_test.py（分工3）
-- 入库管线：backend/index_pipeline.py（agent）
-- 数据库/解析：backend/db.py、backend/parser.py（agent）
+职责：仅做路由装配与启动入口，不写业务逻辑。
+- 检索精度：backend/retrieval.py（分工 1）
+- 学习板块：backend/learn.py（分工 2）
+- 评估测试：backend/eval_test.py（分工 3）
+- 入库管线：backend/index_pipeline.py
+- 数据库 / 解析：backend/db.py、backend/parser.py
 
 启动：在仓库根目录执行 `uvicorn backend.app:app --reload --port 8000`
 """
@@ -126,7 +126,7 @@ def index_repo(req: IndexRepoReq):
 
 
 # ---------------------------------------------------------------------------
-# 检索（retrieval.py 归属：分工1）
+# 检索（retrieval.py）
 # ---------------------------------------------------------------------------
 @app.post("/api/search")
 def search(req: SearchReq):
@@ -182,7 +182,7 @@ def modules():
 
 
 # ---------------------------------------------------------------------------
-# 学习板块（learn.py 归属：分工2）
+# 学习板块（learn.py）
 # ---------------------------------------------------------------------------
 @app.get("/api/learn/modules")
 def learn_modules():
@@ -210,7 +210,7 @@ def learn_call_graph(module: str = ""):
 
 
 # ---------------------------------------------------------------------------
-# 评估测试（eval_test.py 归属：分工3）
+# 评估测试（eval_test.py）
 # ---------------------------------------------------------------------------
 @app.get("/api/eval")
 def eval_endpoint():
