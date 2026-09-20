@@ -122,13 +122,6 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
     project_id = cur.lastrowid
     conn.close()
 
-    # 读取仓库 README，按模块切分（模块搜索时原样展示 README 内容）
-    readme_sections = {}
-    for readme_candidate in (os.path.join(tmp, "README.md"), os.path.join(tmp, "numpy_ml", "README.md")):
-        readme_sections = parser.extract_module_readmes(readme_candidate)
-        if readme_sections:
-            break
-
     # 先按模块目录分组，确保每个模块在 modules 表中有一行
     module_files = defaultdict(list)
     for root, _, fns in os.walk(tmp):
@@ -147,6 +140,24 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
                 continue
             module_files[module].append((p, rel))
 
+    # 读取仓库 README，按模块切分（无模块专属 README 时作为 fallback）
+    readme_sections = {}
+    for readme_candidate in (os.path.join(tmp, "README.md"), os.path.join(tmp, "numpy_ml", "README.md")):
+        readme_sections = parser.extract_module_readmes(readme_candidate)
+        if readme_sections:
+            break
+
+    # 模块专属 README 优先（如 numpy_ml/neural_nets/README.md），没有再 fallback 到概览
+    module_readme = {}
+    for module in sorted(module_files.keys()):
+        if not module or module in parser.NON_ALGO_MODULES:
+            continue
+        specific = os.path.join(tmp, "numpy_ml", module, "README.md")
+        if os.path.isfile(specific):
+            module_readme[module] = open(specific, encoding="utf-8", errors="replace").read()
+        else:
+            module_readme[module] = readme_sections.get(module, "")
+
     # 创建 modules 表记录（空模块名是顶层 loose 文件，不建模块行）
     module_id_map = {"": None}
     conn = db.get_conn()
@@ -155,7 +166,7 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
         if not module or module in parser.NON_ALGO_MODULES:
             continue
         family = parser.FAMILY_MAP.get(module, "Other")
-        readme = readme_sections.get(module, "")
+        readme = module_readme.get(module, "")
         cur.execute(
             "INSERT INTO modules(project_id,name,family,task,readme) VALUES(%s,%s,%s,%s,%s) "
             "ON DUPLICATE KEY UPDATE family=VALUES(family), task=VALUES(task), readme=VALUES(readme)",

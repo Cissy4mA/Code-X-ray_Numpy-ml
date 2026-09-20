@@ -59,6 +59,11 @@
  .score-row .label{width:60px;color:#666}
  .score-row .bar{flex:1;height:8px}
  .tree{padding-left:16px;border-left:2px solid #e2e8f0;margin-left:6px}
+ .readme{max-height:260px;overflow-y:auto;border:1px solid #e1e4e8;border-radius:6px;padding:10px;background:#fff;font-size:13px}
+ .readme p{margin:6px 0}
+ .readme ul,.readme ol{margin:6px 0;padding-left:20px}
+ .readme li{margin:2px 0}
+ .readme h1,.readme h2,.readme h3{font-size:14px;margin:10px 0 6px}
 </style>
 </head>
 <body data-page-node-id="Qqmpz4cdb5M5acz6I1QiBC">
@@ -94,7 +99,7 @@
 
 <!-- 3.1 Module Search / 模块搜索 -->
 <h3>3.1 Module Search / 模块搜索</h3>
-<p class="meta">Search the 13 algorithm modules. Results show module summaries like a README, no code. / 搜索 13 个算法模块，结果以 README 风格展示模块摘要，不显示代码。</p>
+<p class="meta">Search the 13 algorithm modules. Each result shows the module's own README (e.g., <code>numpy_ml/neural_nets/README.md</code>) in a scrollable box. / 搜索 13 个算法模块，每个结果在滚动框中展示该模块目录下的 README 原文（如 <code>numpy_ml/neural_nets/README.md</code>），不显示代码。</p>
 <div class="row">
   <div style="flex:1"><input type="text" id="moduleQuery" placeholder="e.g. neural network, reinforcement learning / 例如 神经网络、强化学习"></div>
   <div style="max-width:120px"><button onclick="doModuleSearch()">Search / 检索</button></div>
