@@ -239,23 +239,32 @@ async function doModuleSearch(){
     const j=await r.json();
     let mods=j.modules||[];
     if(q){
-      mods=mods.filter(m=>
-        m.name.toLowerCase().includes(q) ||
-        (m.family||"").toLowerCase().includes(q) ||
-        (m.description||"").toLowerCase().includes(q) ||
-        (m.samples||[]).some(s=>s.toLowerCase().includes(q))
-      );
+      mods=mods.filter(m=>{
+        const hay = [
+          m.name,
+          m.family||"",
+          m.description||"",
+          m.readme||"",
+          ...(m.samples||[]),
+          ...(m.aliases||[]),
+        ].join(" ").toLowerCase();
+        return hay.includes(q);
+      });
     }
     if(!mods.length){ box.innerHTML="<i class='meta'>No matching modules / 无匹配模块</i>"; return; }
     box.innerHTML=mods.map(m=>{
       const readmeHtml = window.marked && m.readme ? marked.parse(m.readme) : `<div class="meta">${m.description}</div>`;
+      const aliasHtml = (m.aliases||[]).length
+        ? `<div class="meta" style="margin-top:6px">别名 / Aliases：${(m.aliases||[]).join("、")}</div>`
+        : "";
       return `
       <div class="card" onclick="selectModule('${m.name}')">
         <div><span class="tag">${m.family||"Module"}</span><b>${m.name}</b></div>
         <div class="meta">Files ${m.file_count} · Classes ${m.class_count} · Functions ${m.function_count}</div>
+        ${aliasHtml}
         <div class="readme" style="margin-top:8px">${readmeHtml}</div>
       </div>
-    `}).join("");
+    `).join("");
     if(window.renderMathInElement){ renderMathInElement(box,{delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}]}); }
   }catch(e){ box.innerHTML="<i class='meta'>Module search failed / 模块搜索失败："+e.message+"</i>"; }
 }

@@ -167,10 +167,11 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
             continue
         family = parser.FAMILY_MAP.get(module, "Other")
         readme = module_readme.get(module, "")
+        aliases = parser.MODULE_ALIASES.get(module, [])
         cur.execute(
-            "INSERT INTO modules(project_id,name,family,task,readme) VALUES(%s,%s,%s,%s,%s) "
-            "ON DUPLICATE KEY UPDATE family=VALUES(family), task=VALUES(task), readme=VALUES(readme)",
-            (project_id, module, family, "other", readme),
+            "INSERT INTO modules(project_id,name,family,task,readme,aliases) VALUES(%s,%s,%s,%s,%s,%s) "
+            "ON DUPLICATE KEY UPDATE family=VALUES(family), task=VALUES(task), readme=VALUES(readme), aliases=VALUES(aliases)",
+            (project_id, module, family, "other", readme, json.dumps(aliases, ensure_ascii=False)),
         )
         cur.execute("SELECT id FROM modules WHERE project_id=%s AND name=%s", (project_id, module))
         module_id_map[module] = cur.fetchone()[0]

@@ -56,6 +56,65 @@ FAMILY_MAP = {
 # 不参与检索/统计的非算法目录（测试、绘图）
 NON_ALGO_MODULES = {"tests", "plots"}
 
+# 13 个算法模块的「全称 / 缩写 / 中英文别名」，入库时写入 modules.aliases，
+# 模块搜索时一并匹配，解决「只认缩写、不认全称 / 初学者看不懂缩写」的问题。
+MODULE_ALIASES = {
+    "bandits": [
+        "Bandits", "Multi-armed Bandits", "MAB", "Contextual Bandits",
+        "多臂老虎机", "多臂赌博机", "强盗算法", "老虎机问题",
+    ],
+    "factorization": [
+        "Matrix Factorization", "Factorization Machines", "MF", "FM",
+        "矩阵分解", "分解机", "矩阵分解机",
+    ],
+    "gmm": [
+        "Gaussian Mixture Model", "Gaussian Mixture Models", "GMM",
+        "Mixture of Gaussians", "Mixture of Gaussian", "高斯混合模型", "高斯混合",
+    ],
+    "hmm": [
+        "Hidden Markov Model", "Hidden Markov Models", "HMM",
+        "隐马尔可夫模型", "隐马尔可夫", "隐马模型",
+    ],
+    "lda": [
+        "Latent Dirichlet Allocation", "LDA", "Topic Model", "Topic Models",
+        "主题模型", "隐含狄利克雷分布", "潜在狄利克雷分配",
+    ],
+    "linear_models": [
+        "Linear Models", "Generalized Linear Models", "GLM",
+        "Linear Regression", "Logistic Regression", "Ridge Regression", "Lasso",
+        "线性回归", "逻辑回归", "岭回归", "套索回归", "线性模型", "广义线性模型",
+    ],
+    "neural_nets": [
+        "Neural Networks", "Neural Network", "Deep Learning", "Deep Neural Network",
+        "DNN", "NN", "Feedforward Network", "人工神经网络",
+        "神经网络", "深度学习", "深度神经网络", "前馈神经网络",
+    ],
+    "ngram": [
+        "N-Gram", "N-Grams", "N-Gram Language Model", "Ngram", "Ngrams",
+        "N元文法", "N元语法", "语言模型", "n元模型",
+    ],
+    "nonparametric": [
+        "Nonparametric Models", "Non-parametric Models", "Nonparametric", "Kernel Density Estimation",
+        "KDE", "核密度估计", "非参数模型", "非参数方法",
+    ],
+    "preprocessing": [
+        "Preprocessing", "Data Preprocessing", "Feature Scaling", "Normalization",
+        "Standardization", "Min-Max Scaling", "数据预处理", "特征缩放", "标准化", "归一化",
+    ],
+    "rl_models": [
+        "Reinforcement Learning", "RL", "Agents", "Markov Decision Process", "MDP",
+        "强化学习", "智能体", "强化学习智能体", "马尔可夫决策过程",
+    ],
+    "trees": [
+        "Decision Trees", "Random Forest", "Gradient Boosted Trees", "GBDT",
+        "XGBoost", "CART", "决策树", "随机森林", "梯度提升树", "梯度提升决策树",
+    ],
+    "utils": [
+        "Utilities", "Utils", "Helper Functions", "Utility Functions",
+        "工具函数", "辅助函数", "工具模块",
+    ],
+}
+
 # numpy-ml README.md 中“Available models”标题 -> 模块目录名
 README_MODULE_MAP = {
     "gaussian mixture model": "gmm",

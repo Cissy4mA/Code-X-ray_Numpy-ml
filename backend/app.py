@@ -11,6 +11,7 @@
 """
 import os
 import sys
+import json
 
 # 保证无论从哪个目录启动，backend 包都可被导入
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -152,10 +153,10 @@ def modules():
     conn = db.get_conn()
     cur = conn.cursor()
     non_algo = tuple(parser.NON_ALGO_MODULES)
-    cur.execute("SELECT id, name, family, readme FROM modules WHERE name NOT IN %s ORDER BY name", (non_algo,))
+    cur.execute("SELECT id, name, family, readme, aliases FROM modules WHERE name NOT IN %s ORDER BY name", (non_algo,))
     rows = cur.fetchall()
     out = []
-    for mid, name, family, readme in rows:
+    for mid, name, family, readme, aliases in rows:
         cur.execute("SELECT COUNT(*) FROM code_files WHERE module_id=%s", (mid,))
         file_count = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM algorithms a JOIN code_files f ON a.file_id=f.id WHERE f.module_id=%s", (mid,))
@@ -167,6 +168,10 @@ def modules():
             (mid,),
         )
         samples = [r[0] for r in cur.fetchall()]
+        try:
+            alias_list = json.loads(aliases) if aliases else []
+        except (json.JSONDecodeError, TypeError):
+            alias_list = []
         out.append({
             "name": name,
             "family": family or parser.FAMILY_MAP.get(name, "Other"),
@@ -175,6 +180,7 @@ def modules():
             "function_count": function_count,
             "samples": samples,
             "readme": readme or "",
+            "aliases": alias_list,
             "description": f"{family or parser.FAMILY_MAP.get(name, 'Module')} — {class_count or 0} algorithm classes, {function_count or 0} functions.",
         })
     conn.close()

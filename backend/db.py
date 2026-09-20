@@ -41,7 +41,8 @@ _TABLES = [
         family VARCHAR(128),
         task VARCHAR(64),
         description TEXT,
-        readme TEXT,                              -- 模块对应的 GitHub README 原文（numpy_ml/README.md 分段）
+        readme TEXT,                              -- 模块对应的 GitHub README 原文（numpy_ml/<module>/README.md）
+        aliases TEXT,                             -- 模块全称/缩写/中英文别名 JSON 数组，模块搜索时一并匹配
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uk_module_name (project_id, name),
         INDEX idx_modules_project (project_id)
@@ -185,6 +186,7 @@ _MIGRATIONS = [
         INDEX idx_modules_project (project_id)
     ) ENGINE=InnoDB""",
     "ALTER TABLE modules ADD COLUMN IF NOT EXISTS readme TEXT",
+    "ALTER TABLE modules ADD COLUMN IF NOT EXISTS aliases TEXT",
     "ALTER TABLE code_files ADD COLUMN IF NOT EXISTS module VARCHAR(128)",
     "ALTER TABLE code_files ADD COLUMN IF NOT EXISTS module_id INT",
     "DROP INDEX IF EXISTS ft_code ON code_chunks",
