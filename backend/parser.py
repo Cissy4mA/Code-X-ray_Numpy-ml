@@ -423,6 +423,54 @@ def extract_module_readmes(readme_path):
     return sections
 
 
+def rewrite_image_paths(readme: str, module: str, repo_url: str, branch: str = "master") -> str:
+    """把模块 README 里的相对图片路径改写成 GitHub raw 绝对路径，避免前端展示破图。"""
+    base = repo_url.rstrip("/")
+    if base.endswith(".git"):
+        base = base[:-4]
+    # github.com -> raw.githubusercontent.com
+    base = re.sub(r"https?://github\.com/([^/]+)/([^/]+)", r"https://raw.githubusercontent.com/\1/\2", base)
+    prefix = f"{base}/{branch}/numpy_ml/{module}/"
+
+    def _is_absolute(path: str) -> bool:
+        return path.startswith(("http://", "https://", "data:"))
+
+    # Markdown: ![alt](path)
+    def md_repl(m):
+        alt = m.group(1)
+        path = m.group(2).strip()
+        if _is_absolute(path):
+            return m.group(0)
+        if path.startswith("/"):
+            path = path.lstrip("/")
+            if path.startswith("numpy_ml/"):
+                return f"![{alt}]({base}/{branch}/{path})"
+            path = f"numpy_ml/{module}/{path}"
+            return f"![{alt}]({base}/{branch}/{path})"
+        return f"![{alt}]({prefix}{path})"
+
+    readme = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", md_repl, readme)
+
+    # HTML <img src="..."> / <img src='...'>
+    def src_repl(m):
+        quote = m.group(1)
+        path = m.group(2).strip()
+        if _is_absolute(path):
+            return m.group(0)
+        if path.startswith("/"):
+            path = path.lstrip("/")
+            if path.startswith("numpy_ml/"):
+                new_src = f"{base}/{branch}/{path}"
+            else:
+                new_src = f"{base}/{branch}/numpy_ml/{module}/{path}"
+        else:
+            new_src = f"{prefix}{path}"
+        return f"src={quote}{new_src}{quote}"
+
+    readme = re.sub(r"src=(['\"])([^'\"]+)\1", src_repl, readme)
+    return readme
+
+
 # -----------------------------------------------------------------------------
 # 3. Embedding：API 优先，本地 sentence-transformers 兜底（默认）
 # -----------------------------------------------------------------------------

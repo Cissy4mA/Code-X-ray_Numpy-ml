@@ -154,9 +154,10 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
             continue
         specific = os.path.join(tmp, "numpy_ml", module, "README.md")
         if os.path.isfile(specific):
-            module_readme[module] = open(specific, encoding="utf-8", errors="replace").read()
+            raw_readme = open(specific, encoding="utf-8", errors="replace").read()
         else:
-            module_readme[module] = readme_sections.get(module, "")
+            raw_readme = readme_sections.get(module, "")
+        module_readme[module] = parser.rewrite_image_paths(raw_readme, module, repo_url, branch)
 
     # 创建 modules 表记录（空模块名是顶层 loose 文件，不建模块行）
     module_id_map = {"": None}
