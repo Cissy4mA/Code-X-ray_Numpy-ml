@@ -264,7 +264,7 @@ async function doModuleSearch(){
         ${aliasHtml}
         <div class="readme" style="margin-top:8px">${readmeHtml}</div>
       </div>
-    `).join("");
+    `}).join("");
     if(window.renderMathInElement){ renderMathInElement(box,{delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}]}); }
   }catch(e){ box.innerHTML="<i class='meta'>Module search failed / 模块搜索失败："+e.message+"</i>"; }
 }
