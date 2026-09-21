@@ -20,7 +20,7 @@ if REPO_ROOT not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend import db, parser
 from backend import retrieval, learn, eval_test, index_pipeline
@@ -53,7 +53,7 @@ class IndexRepoReq(BaseModel):
 
 class ModuleSearchReq(BaseModel):
     query: str = ""
-    top_k: int = 13
+    top_k: int = Field(default=3, ge=1, le=3, description="Module search result limit (1-3)")
 
 
 # ---------------------------------------------------------------------------

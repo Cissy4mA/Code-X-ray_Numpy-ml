@@ -236,9 +236,10 @@ async function doModuleSearch(){
   const box=document.getElementById("moduleResult");
   box.innerHTML="<i class='meta'>Loading modules… / 加载模块中…</i>";
   try{
+    let topK=Math.max(1, Math.min(3, +document.getElementById("moduleTopK").value||3));
     const r=await fetch(BASE+"/api/modules/search",{
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({query: raw, top_k: 13})
+      body: JSON.stringify({query: raw, top_k: topK})
     });
     const j=await r.json();
     const mods=j.results||[];
