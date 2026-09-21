@@ -21,6 +21,26 @@ EVAL_QUERIES = [
     {"query": "naive bayes classifier", "module": "naive_bayes", "algorithm": "NaiveBayes"},
 ]
 
+# 模块级评测：近义 / 自然语言表达，验证语义检索（RRF）带来的召回增量（分工 1 · 方案 3）。
+# 注意：仅覆盖 numpy-ml 当前 master 真实存在的 13 个模块
+# （naive_bayes / ar_models 等已从上游仓库移除，不再作为期望模块）。
+MODULE_EVAL_QUERIES = [
+    {"query": "topic modeling over documents", "module": "lda"},
+    {"query": "mixture of gaussians for clustering", "module": "gmm"},
+    {"query": "deep learning neural network", "module": "neural_nets"},
+    {"query": "learn to play games by reward", "module": "rl_models"},
+    {"query": "sequential data with hidden states", "module": "hmm"},
+    {"query": "recommendation with matrix factorization", "module": "factorization"},
+    {"query": "classification with trees", "module": "trees"},
+    {"query": "multi-armed bandit", "module": "bandits"},
+    {"query": "linear regression", "module": "linear_models"},
+    {"query": "n-gram language model", "module": "ngram"},
+    {"query": "kernel density estimation", "module": "nonparametric"},
+    {"query": "normalize and scale features", "module": "preprocessing"},
+    {"query": "helper functions and utilities", "module": "utils"},
+    {"query": "cluster text into topics", "module": "lda"},
+]
+
 
 def _req(q, top_k=20):
     return SimpleNamespace(query=q["query"], top_k=top_k, module="", family="", task="")
@@ -110,3 +130,44 @@ def smoke_test():
         out["db_ok"] = False
         out["error"] = str(e)[:300]
     return out
+
+
+def evaluate_modules():
+    """模块级评测：用近义/自然语言表达验证 RRF 融合检索能否把期望模块排到前列。"""
+    per_query = []
+    rr_sum = 0.0
+    h1 = h3 = h5 = 0
+    for q in MODULE_EVAL_QUERIES:
+        res = retrieval.module_search(SimpleNamespace(query=q["query"], top_k=13))
+        results = res["results"]
+        exp = q["module"]
+        rr = 0.0
+        for i, r in enumerate(results, start=1):
+            if r["name"] == exp:
+                rr = 1.0 / i
+                break
+        rr_sum += rr
+        if any(r["name"] == exp for r in results[:1]):
+            h1 += 1
+        if any(r["name"] == exp for r in results[:3]):
+            h3 += 1
+        if any(r["name"] == exp for r in results[:5]):
+            h5 += 1
+        per_query.append({
+            "query": q["query"],
+            "expected_module": exp,
+            "mrr": round(rr, 4),
+            "hit@1": any(r["name"] == exp for r in results[:1]),
+            "hit@3": any(r["name"] == exp for r in results[:3]),
+            "hit@5": any(r["name"] == exp for r in results[:5]),
+            "top1": results[0]["name"] if results else None,
+        })
+    n = len(MODULE_EVAL_QUERIES)
+    return {
+        "n": n,
+        "MRR": round(rr_sum / n, 4) if n else 0.0,
+        "Hit@1": round(h1 / n, 4) if n else 0.0,
+        "Hit@3": round(h3 / n, 4) if n else 0.0,
+        "Hit@5": round(h5 / n, 4) if n else 0.0,
+        "per_query": per_query,
+    }

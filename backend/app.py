@@ -51,6 +51,11 @@ class IndexRepoReq(BaseModel):
     reset_first: bool = True
 
 
+class ModuleSearchReq(BaseModel):
+    query: str = ""
+    top_k: int = 13
+
+
 # ---------------------------------------------------------------------------
 # 基础 / 元接口
 # ---------------------------------------------------------------------------
@@ -155,36 +160,15 @@ def modules():
     non_algo = tuple(parser.NON_ALGO_MODULES)
     cur.execute("SELECT id, name, family, readme, aliases FROM modules WHERE name NOT IN %s ORDER BY name", (non_algo,))
     rows = cur.fetchall()
-    out = []
-    for mid, name, family, readme, aliases in rows:
-        cur.execute("SELECT COUNT(*) FROM code_files WHERE module_id=%s", (mid,))
-        file_count = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM algorithms a JOIN code_files f ON a.file_id=f.id WHERE f.module_id=%s", (mid,))
-        class_count = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM functions fn JOIN code_files f ON fn.file_id=f.id WHERE f.module_id=%s", (mid,))
-        function_count = cur.fetchone()[0]
-        cur.execute(
-            "SELECT a.name FROM algorithms a JOIN code_files f ON a.file_id=f.id WHERE f.module_id=%s ORDER BY a.id LIMIT 5",
-            (mid,),
-        )
-        samples = [r[0] for r in cur.fetchall()]
-        try:
-            alias_list = json.loads(aliases) if aliases else []
-        except (json.JSONDecodeError, TypeError):
-            alias_list = []
-        out.append({
-            "name": name,
-            "family": family or parser.FAMILY_MAP.get(name, "Other"),
-            "file_count": file_count,
-            "class_count": class_count,
-            "function_count": function_count,
-            "samples": samples,
-            "readme": readme or "",
-            "aliases": alias_list,
-            "description": f"{family or parser.FAMILY_MAP.get(name, 'Module')} — {class_count or 0} algorithm classes, {function_count or 0} functions.",
-        })
+    out = retrieval.build_module_cards(cur, rows)
     conn.close()
     return {"modules": out}
+
+
+@app.post("/api/modules/search")
+def modules_search(req: ModuleSearchReq):
+    """模块混合检索：关键词 + README 语义，RRF 融合（分工 1 · 方案 3）。"""
+    return retrieval.module_search(req)
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +205,11 @@ def learn_call_graph(module: str = ""):
 @app.get("/api/eval")
 def eval_endpoint():
     return eval_test.evaluate()
+
+
+@app.get("/api/eval/modules")
+def eval_modules_endpoint():
+    return eval_test.evaluate_modules()
 
 
 @app.get("/api/smoke")

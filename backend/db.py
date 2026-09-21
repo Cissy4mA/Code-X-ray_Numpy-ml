@@ -41,6 +41,7 @@ _TABLES = [
         description TEXT,
         readme TEXT,                              -- 模块对应的 GitHub README 原文（numpy_ml/<module>/README.md）
         aliases TEXT,                             -- 模块全称/缩写/中英文别名 JSON 数组，模块搜索时一并匹配
+        readme_embedding TEXT,                    -- 模块 README 语义向量（384 维 JSON），模块语义检索用
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uk_module_name (project_id, name),
         INDEX idx_modules_project (project_id)
@@ -136,6 +137,7 @@ _MIGRATIONS = [
     ) ENGINE=InnoDB""",
     "ALTER TABLE modules ADD COLUMN IF NOT EXISTS readme TEXT",
     "ALTER TABLE modules ADD COLUMN IF NOT EXISTS aliases TEXT",
+    "ALTER TABLE modules ADD COLUMN IF NOT EXISTS readme_embedding TEXT",
     "ALTER TABLE code_files ADD COLUMN IF NOT EXISTS module VARCHAR(128)",
     "ALTER TABLE code_files ADD COLUMN IF NOT EXISTS module_id INT",
 ]

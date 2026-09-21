@@ -496,6 +496,23 @@ def embed(text):
     return vec.tolist()
 
 
+def module_embed_text(name, family, aliases, readme):
+    """构造「模块级」语义向量用的富集文本：名称 + 算法族 + 别名 + README。
+
+    别名是模块的「概念锚点」（如 preprocessing 的 Normalization / Feature Scaling /
+    Standardization），只拿 README 编码会让「normalize and scale features」这类自然语言
+    查询语义上找不到 preprocessing。把别名编进来后，语义检索才能命中模块的概念层。
+    """
+    alias_str = " ".join(aliases) if isinstance(aliases, list) else (aliases or "")
+    parts = [name, family or "", alias_str, (readme or "")[:3500]]
+    return " ".join(p for p in parts if p).strip()
+
+
+def embed_module(name, family, aliases, readme):
+    """模块级语义向量：name + 算法族 + 别名 + README 富集后编码。"""
+    return embed(module_embed_text(name, family, aliases, readme))
+
+
 def tokenize(text):
     toks = re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", text.lower())
     return [t for t in toks if t not in PY_STOP and len(t) > 1]

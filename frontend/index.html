@@ -231,37 +231,32 @@ async function clearDb(){
 
 
 async function doModuleSearch(){
-  const q=document.getElementById("moduleQuery").value.trim().toLowerCase();
+  const raw=document.getElementById("moduleQuery").value.trim();
+  const q=raw.toLowerCase();
   const box=document.getElementById("moduleResult");
   box.innerHTML="<i class='meta'>Loading modules… / 加载模块中…</i>";
   try{
-    const r=await fetch(BASE+"/api/modules");
+    const r=await fetch(BASE+"/api/modules/search",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({query: raw, top_k: 13})
+    });
     const j=await r.json();
-    let mods=j.modules||[];
-    if(q){
-      mods=mods.filter(m=>{
-        const hay = [
-          m.name,
-          m.family||"",
-          m.description||"",
-          m.readme||"",
-          ...(m.samples||[]),
-          ...(m.aliases||[]),
-        ].join(" ").toLowerCase();
-        return hay.includes(q);
-      });
-    }
+    const mods=j.results||[];
     if(!mods.length){ box.innerHTML="<i class='meta'>No matching modules / 无匹配模块</i>"; return; }
     box.innerHTML=mods.map(m=>{
       const readmeHtml = window.marked && m.readme ? marked.parse(m.readme) : `<div class="meta">${m.description}</div>`;
       const aliasHtml = (m.aliases||[]).length
         ? `<div class="meta" style="margin-top:6px">别名 / Aliases：${(m.aliases||[]).join("、")}</div>`
         : "";
+      const reasonHtml = m.reason
+        ? `<div class="meta" style="margin-top:6px;color:#2563eb">匹配 / Why：${m.reason}</div>`
+        : "";
       return `
       <div class="card" onclick="selectModule('${m.name}')">
         <div><span class="tag">${m.family||"Module"}</span><b>${m.name}</b></div>
         <div class="meta">Files ${m.file_count} · Classes ${m.class_count} · Functions ${m.function_count}</div>
         ${aliasHtml}
+        ${reasonHtml}
         <div class="readme" style="margin-top:8px">${readmeHtml}</div>
       </div>
     `}).join("");

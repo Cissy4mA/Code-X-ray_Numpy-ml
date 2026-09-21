@@ -165,10 +165,14 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
         family = parser.FAMILY_MAP.get(module, "Other")
         readme = module_readme.get(module, "")
         aliases = parser.MODULE_ALIASES.get(module, [])
+        # 方案 3：为模块生成「富集语义向量」——name + 算法族 + 别名 + README 一起编码，
+        # 让模块级语义检索能命中别名/概念层（如 "normalize and scale features" -> preprocessing）
+        readme_vec = parser.embed_module(module, family, aliases, readme) if readme else [0.0] * parser.DIM
         cur.execute(
-            "INSERT INTO modules(project_id,name,family,task,readme,aliases) VALUES(%s,%s,%s,%s,%s,%s) "
-            "ON DUPLICATE KEY UPDATE family=VALUES(family), task=VALUES(task), readme=VALUES(readme), aliases=VALUES(aliases)",
-            (project_id, module, family, "other", readme, json.dumps(aliases, ensure_ascii=False)),
+            "INSERT INTO modules(project_id,name,family,task,readme,aliases,readme_embedding) VALUES(%s,%s,%s,%s,%s,%s,%s) "
+            "ON DUPLICATE KEY UPDATE family=VALUES(family), task=VALUES(task), readme=VALUES(readme), "
+            "aliases=VALUES(aliases), readme_embedding=VALUES(readme_embedding)",
+            (project_id, module, family, "other", readme, json.dumps(aliases, ensure_ascii=False), json.dumps(readme_vec)),
         )
         cur.execute("SELECT id FROM modules WHERE project_id=%s AND name=%s", (project_id, module))
         module_id_map[module] = cur.fetchone()[0]
