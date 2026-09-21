@@ -20,13 +20,13 @@ code-x-ray/
 ├── scripts/
 │   ├── deploy.sh           # 一键部署（建 venv→装依赖→建库→恢复/重建数据→启动）
 │   ├── run.sh              # 日常启动
-│   ├── export_db.sh        # 导出数据库 dump
+│   ├── export_db.sh        # 导出数据库 dump│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储
 │   ├── migrations/         # 历史迁移/工具脚本（留档）
 │   └── test_demo.py
 ├── data/
 │   ├── learn_content.json  # 学习板块内容模板
-│   └── code_x_ray.sql      # （可选·非必须）数据库 dump，仅用于加速部署
-├── sample/
+│   └── code_x_ray.sql      # （可选·非必须）数据库 dump，仅用于加速部署│ └── code_x_ray.sql # （可选·非必须）数据库转储文件，仅用于加速部署
+├── sample/├── 示例/
 ├── requirements.txt
 ├── .env.example
 └── .gitignore
@@ -52,7 +52,7 @@ code-x-ray/
 
 ---
 
-## 三、一键部署（队友照做即可跑起来）
+## 三、一键部署
 
 ```bash
 git clone https://github.com/Cissy4mA/Code-X-ray_Numpy-ml.git
