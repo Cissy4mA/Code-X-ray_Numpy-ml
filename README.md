@@ -3,13 +3,7 @@
 把 NumPy-ML 这类算法仓库，像做 X 光一样“透视”给学习者看：精确/模糊双模式检索 +
 知识卡片 + 算法对比 + 学习路径 + 调用关系图，降低机器学习源码的学习门槛。
 
-> 产品命名、问题陈述、目标人群见 [`docs/项目简介与命名.md`](docs/项目简介与命名.md)；
-> 小组分工与三周计划见 [`docs/分工方案.md`](docs/分工方案.md)；
-> 协作与贡献流程（分支 / PR / 每人负责的文件）见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
-
----
-
-## 一、目录结构（已按人拆分，合并互不冲突）
+## 一、目录结构
 
 ```
 code-x-ray/
@@ -30,9 +24,8 @@ code-x-ray/
 │   ├── migrations/         # 历史迁移/工具脚本（留档）
 │   └── test_demo.py
 ├── data/
-│   ├── learn_content.json  # 学习板块内容模板（分工2 维护）
-│   └── code_x_ray.sql      # （可选·非必须）数据库 dump，仅用于加速部署；队友无需准备，deploy.sh 会自动从 numpy-ml 导入
-├── docs/                   # 项目文档（简介/分工/设计）
+│   ├── learn_content.json  # 学习板块内容模板
+│   └── code_x_ray.sql      # （可选·非必须）数据库 dump，仅用于加速部署
 ├── sample/
 ├── requirements.txt
 ├── .env.example

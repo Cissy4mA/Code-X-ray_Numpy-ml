@@ -2,23 +2,7 @@
 
 本仓库是 **Cissy4mA/Code-X-ray_Numpy-ml**，`main` 为保护分支，**任何人不要直接 push 到 main**，一律走「开分支 → 改对应文件 → 提 PR → 组长合并」。
 
----
-
-## 一、两种接入方式（组长选一种）
-
-### 方式 A：加为协作者（推荐，最省事）
-1. 组长在 GitHub 仓库 `Settings → Collaborators` 里加入 5 位组员的 GitHub 账号，权限选 **Write**。
-2. 组员直接 clone 主仓库（见下），无需 fork。
-
-### 方式 B：Fork 工作流（组员无 write 权限时）
-1. 组员在 GitHub 上 Fork 本仓库到自己的账户。
-2. clone 自己的 fork，改完 push 到 fork，再提 PR 回主仓库的 `main`。
-
-> 小组作业 6 人，方式 A 最顺；只有有人没 GitHub 账号或不想给权限时才用 B。
-
----
-
-## 二、标准开发流程
+## 一、标准开发流程
 
 ```bash
 # 1. 克隆主仓库（方式 A）或自己的 fork（方式 B）
