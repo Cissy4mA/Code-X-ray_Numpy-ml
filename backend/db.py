@@ -2,11 +2,9 @@
 
 这就是「前端 ↔ SQL」链路里最底层的那根线：
 后端 FastAPI 通过 pymysql 连到本地 XAMPP 的 MySQL，
-所有 chunk / 文件 / 项目元数据都落在这三张表里。
-
-v2 扩展：为支持 ML 算法类级切分 + 检索过滤 + 学习型展示，
-code_chunks 增加了 module / family / task / math_methods / params /
-references / docstring_math / complexity / ref_edges / call_edges 等列。
+所有 chunk / 文件 / 项目元数据落在 projects / code_files / algorithms /
+functions / modules 等表中；代码 chunk 以「类→algorithms、函数→functions」
+两级存储，各自的 embedding_json 列存放向量（不再使用 code_chunks 废弃表）。
 """
 import os
 import pymysql
@@ -58,40 +56,6 @@ _TABLES = [
         INDEX idx_files_project (project_id),
         INDEX idx_files_module (module_id)
     ) ENGINE=InnoDB""",
-    """CREATE TABLE IF NOT EXISTS code_chunks (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        file_id INT NOT NULL,
-        chunk_type VARCHAR(32) NOT NULL,          -- class / function / method
-        entity_name VARCHAR(255),
-        parent_class VARCHAR(255),                -- method 所属的 class name（冗余展示用）
-        class_id INT NULL,                        -- 第 4 层外键：function/method 指向所属 class 那一行
-        module VARCHAR(128),                      -- 仓库内顶层目录（如 neural_nets）
-        family VARCHAR(128),                      -- 算法族（如 Neural Networks / Tree-based）
-        task VARCHAR(64),                         -- 任务类型（classification/regression/...）
-        math_methods TEXT,                        -- 从 docstring 抽取的数学方法标签
-        params TEXT,                              -- __init__ 参数 schema
-        `references` TEXT,                        -- 参考文献（Bishop 2006 等）
-        docstring_math TEXT,                      -- 结构化数学描述（目标函数/假设）
-        complexity FLOAT,                         -- 复杂度启发式
-        ref_edges JSON,                           -- 引用边：基类 / import
-        call_edges JSON,                         -- 调用边：方法内调用的符号
-        start_line INT,
-        end_line INT,
-        code_text TEXT NOT NULL,
-        embedding_text TEXT,                      -- 用于生成向量的原始富文本（便于调试/重算）
-        embedding_json TEXT,                      -- 向量 JSON 数组
-        chunk_metadata JSON,                      -- 扩展字段：注释、调用关系等
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FULLTEXT INDEX ft_code (code_text, entity_name, embedding_text),  -- 关键词检索
-        INDEX idx_chunks_file (file_id),
-        INDEX idx_chunks_class (class_id),
-        INDEX idx_chunks_type (chunk_type),
-        INDEX idx_chunks_family (family),
-        INDEX idx_chunks_task (task),
-        INDEX idx_chunks_module (module),
-        FOREIGN KEY (file_id) REFERENCES code_files(id) ON DELETE CASCADE,
-        FOREIGN KEY (class_id) REFERENCES code_chunks(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
     """CREATE TABLE IF NOT EXISTS algorithms (
         id INT AUTO_INCREMENT PRIMARY KEY,
         file_id INT NOT NULL,
@@ -157,22 +121,7 @@ _TABLES = [
 # 旧版本表结构迁移：新增字段 + 重建 FULLTEXT 索引以覆盖 embedding_text
 # MariaDB 支持 ADD COLUMN IF NOT EXISTS；其他 MySQL 分支若不支持会被 try/except 忽略。
 _MIGRATIONS = [
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS parent_class VARCHAR(255)",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS embedding_text TEXT",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS chunk_metadata JSON",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS module VARCHAR(128)",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS family VARCHAR(128)",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS task VARCHAR(64)",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS math_methods TEXT",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS params TEXT",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS `references` TEXT",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS docstring_math TEXT",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS complexity FLOAT",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS ref_edges JSON",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS call_edges JSON",
-    "ALTER TABLE code_chunks ADD COLUMN IF NOT EXISTS class_id INT NULL",
-    "ALTER TABLE code_chunks ADD INDEX IF NOT EXISTS idx_chunks_class (class_id)",
-    "ALTER TABLE code_chunks ADD CONSTRAINT fk_chunk_class FOREIGN KEY (class_id) REFERENCES code_chunks(id) ON DELETE CASCADE",
+    "DROP TABLE IF EXISTS code_chunks",  # 清理 v2 遗留的废弃表（数据已落在 algorithms/functions）
     """CREATE TABLE IF NOT EXISTS modules (
         id INT AUTO_INCREMENT PRIMARY KEY,
         project_id INT NOT NULL,
@@ -189,8 +138,6 @@ _MIGRATIONS = [
     "ALTER TABLE modules ADD COLUMN IF NOT EXISTS aliases TEXT",
     "ALTER TABLE code_files ADD COLUMN IF NOT EXISTS module VARCHAR(128)",
     "ALTER TABLE code_files ADD COLUMN IF NOT EXISTS module_id INT",
-    "DROP INDEX IF EXISTS ft_code ON code_chunks",
-    "CREATE FULLTEXT INDEX ft_code ON code_chunks(code_text, entity_name, embedding_text)",
 ]
 
 

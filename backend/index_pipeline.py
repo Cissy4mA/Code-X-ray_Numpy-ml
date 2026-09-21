@@ -19,7 +19,7 @@ def reset_all():
     conn = db.get_conn()
     cur = conn.cursor()
     cur.execute("SET FOREIGN_KEY_CHECKS=0")
-    for t in ("functions", "algorithms", "code_chunks", "code_files", "modules", "projects"):
+    for t in ("functions", "algorithms", "code_files", "modules", "projects"):
         cur.execute(f"TRUNCATE TABLE {t}")
     cur.execute("SET FOREIGN_KEY_CHECKS=1")
     conn.close()
@@ -33,10 +33,6 @@ def index_code(code, filename, module_path="", project_id=None, module_id=None):
     conn = db.get_conn()
     cur = conn.cursor()
     # Demo 阶段：同名文件重新入库时先清旧数据，避免重复
-    cur.execute(
-        "DELETE c FROM code_chunks c JOIN code_files f ON c.file_id=f.id WHERE f.path=%s",
-        (filename,),
-    )
     cur.execute("DELETE FROM code_files WHERE path=%s", (filename,))
 
     if project_id is None:
