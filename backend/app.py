@@ -39,7 +39,7 @@ class IndexReq(BaseModel):
 
 class SearchReq(BaseModel):
     query: str
-    top_k: int = 5
+    top_k: int = 3
     module: str = ""
     family: str = ""
     task: str = ""
@@ -53,7 +53,7 @@ class IndexRepoReq(BaseModel):
 
 class ModuleSearchReq(BaseModel):
     query: str = ""
-    top_k: int = Field(default=3, ge=1, le=3, description="Module search result limit (1-3)")
+    top_k: int = Field(default=1, ge=1, le=3, description="Module search result limit (1-3)")
 
 
 # ---------------------------------------------------------------------------
