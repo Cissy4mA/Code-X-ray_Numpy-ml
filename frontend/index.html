@@ -65,11 +65,11 @@
  .readme ul,.readme ol{margin:6px 0;padding-left:20px}
  .readme li{margin:2px 0}
  .readme h1,.readme h2,.readme h3{font-size:14px;margin:10px 0 6px}
-.class-card{display:flex;gap:0;align-items:stretch;padding:0;overflow:hidden;max-height:520px}
+.class-card{display:flex;gap:0;align-items:stretch;padding:0;overflow:hidden;max-height:720px}
 .class-main{flex:2;min-width:0;padding:12px;display:flex;flex-direction:column;overflow:hidden}
 .class-info{flex:0 0 auto}
-.class-code{flex:1 1 0;min-height:120px;margin-top:10px;background:#0f172a;color:#e2e8f0;border-radius:6px;padding:10px;font-family:monospace;font-size:12px;line-height:1.45;overflow-y:auto;white-space:pre}
-.class-code pre{margin:0;padding:0;background:transparent;color:inherit}
+.class-code{flex:1 1 0;min-height:180px;margin-top:10px;background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-radius:6px;padding:10px;font-family:monospace;font-size:12px;line-height:1.45;overflow-y:auto;white-space:pre}
+.class-code pre{margin:0;padding:0;background:transparent;color:#1e293b}
 .class-funcs{flex:1;min-width:180px;max-width:280px;padding:12px;display:flex;flex-direction:column;overflow:hidden;border-left:1px solid #e2e8f0;background:#f8fafc;border-radius:0 8px 8px 0}
 .func-list{flex:1 1 0;min-height:0;overflow-y:auto}
 .func-item{margin:6px 0;padding-bottom:5px;border-bottom:1px solid #e2e8f0}
@@ -311,8 +311,6 @@ async function doSearch(){
       const funcs=(x.functions||[]).length
         ? (x.functions||[]).map(f=>`<div class="func-item"><div class="func-name">${escapeHtml(f.name)}</div><div class="func-meaning">${escapeHtml(f.meaning||"—")}</div></div>`).join("")
         : '<div class="func-item"><div class="func-meaning">No member functions / 无成员函数</div></div>';
-      const params=(x.params||[]).map(p=>`<span class="tag">${escapeHtml(p)}</span>`).join("")||"<span class='meta'>—</span>";
-      const mathMethods=(x.math_methods||[]).map(m=>`<span class="tag m">${escapeHtml(m)}</span>`).join("")||"<span class='meta'>—</span>";
       el.innerHTML=
         `<div class="class-main">`+
           `<div class="class-info">`+
@@ -321,8 +319,6 @@ async function doSearch(){
             `<div class="score-row"><span class="label">keyword</span><div class="bar"><div style="width:${Math.min(100,((x.keyword||0)/maxScore)*100)}%;background:#16a34a"></div></div><span>${(x.keyword??"?").toString().slice(0,5)}</span></div>`+
             `<div class="score-row"><span class="label">semantic</span><div class="bar"><div style="width:${Math.min(100,((x.semantic||0)/maxScore)*100)}%;background:#9333ea"></div></div><span>${(x.semantic??"?").toString().slice(0,5)}</span></div>`+
             `<div class="meta" style="margin-top:6px">Family / 算法族：${x.family||"—"} · Task / 任务：${x.task||"—"}</div>`+
-            `<div class="meta" style="margin-top:4px">Key Params / 关键参数：${params}</div>`+
-            `<div class="meta" style="margin-top:4px">Math Methods / 数学方法：${mathMethods}</div>`+
           `</div>`+
           `<div class="class-code"><pre>${escapeHtml(x.code||"（no source / 无源码）")}</pre></div>`+
         `</div>`+
