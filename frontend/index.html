@@ -93,10 +93,11 @@
 <!-- 2. Import / 导入 -->
 <h2>2. Import / 导入</h2>
 <p class="meta">Currently numpy-ml is used as the sample kernel; later users will be able to paste any GitHub repo URL to import. / 当前以 numpy-ml 作为示例内核；后续支持用户粘贴任意 GitHub 仓库 URL 导入。</p>
-<div class="row">
-  <div style="flex:2"><input type="text" id="customRepo" placeholder="https://github.com/owner/repo（custom repo import window, TODO / 自定义仓库导入窗口，待实现）" disabled></div>
-  <div style="flex:1"><button class="alt" onclick="importKernel()">Import sample kernel (numpy-ml) / 导入示例内核</button></div>
-  <div style="max-width:110px"><button class="danger" onclick="clearDb()">Clear DB / 清空数据库</button></div>
+<div style="margin-bottom:14px"><input type="text" id="customRepo" style="width:100%;box-sizing:border-box" placeholder="https://github.com/owner/repo（custom repo import window, TODO / 自定义仓库导入窗口，待实现）" disabled></div>
+<div class="row" style="align-items:stretch;margin-bottom:6px">
+  <div style="flex:1"><button class="alt" style="white-space:nowrap;width:100%;height:100%" onclick="importCustomRepo()">Import custom repo / 导入自定义仓库</button></div>
+  <div style="flex:1"><button class="alt" style="white-space:nowrap;width:100%;height:100%" onclick="importKernel()">Import sample kernel (numpy-ml) / 导入示例内核</button></div>
+  <div style="flex:1"><button class="danger" style="white-space:nowrap;width:100%;height:100%" onclick="clearDb()">Clear DB / 清空数据库</button></div>
 </div>
 <div id="importStatus">Not imported yet. Click the button above to start (needs backend /api/index_repo). / 尚未导入。点击上方按钮开始（需后端实现 /api/index_repo）。</div>
 <div>
@@ -149,14 +150,13 @@
     <p class="meta">Pick two algorithms to compare their params, assumptions and math descriptions side by side. / 选择两个算法并排对比其参数、假设与数学描述。</p>
     <div class="two-col">
       <div>
-        <div class="meta">Left / 左侧</div>
-        <div id="compareLeft" class="compare-slot">Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加</div>
+        <div id="compareLeft" class="compare-slot">First click → goes here / 第一次点击「+ 对比」加到这里</div>
       </div>
       <div>
-        <div class="meta">Right / 右侧</div>
-        <div id="compareRight" class="compare-slot">Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加</div>
+        <div id="compareRight" class="compare-slot">Second click → goes here / 第二次点击加到这里</div>
       </div>
     </div>
+    <div style="margin-top:6px"><button class="small-btn ghost" onclick="clearCompare()">🗑 Clear compare / 清空对比</button></div>
     <div id="compareTable" class="hidden" style="margin-top:10px"></div>
   </div>
   <div id="learnPath" class="hidden">
@@ -177,7 +177,7 @@
 const BASE="http://127.0.0.1:8000";
 let currentResults=[];
 let selectedItem=null;
-let compareItems=[];
+let compareSlots=[null,null];  /* 固定左右两个槽位，remove 不挪动另一侧 / fixed slots */
 let allModules=[];
 
 async function loadStats(){
@@ -219,6 +219,11 @@ function bindModCloud(){
 }
 bindModCloud();
 
+function importCustomRepo(){
+  const url=(document.getElementById('customRepo').value||'').trim();
+  if(!url){ alert('Please paste a GitHub repo URL first (custom import is TODO) / 请先粘贴仓库 URL（自定义导入后端待实现）'); return; }
+  alert('Custom repo import is not supported by the backend yet / 后端暂不支持自定义仓库导入（TODO）');
+}
 async function importKernel(){
   const st=document.getElementById("importStatus");
   st.style.color="#92400e"; st.innerText="Importing numpy-ml (clone + class-level chunking + embedding)… / 正在导入 numpy-ml（clone + 类级切分 + 嵌入）…";
@@ -376,21 +381,27 @@ function cap(s){ return s[0].toUpperCase()+s.slice(1); }
 function addCompare(idx){ addCompareByItem(currentResults[idx]); }
 function addCompareByItem(item){
   if(!item){ alert('Please select a result first / 请先选择一个结果'); return; }
-  if(compareItems.find(c=>c.entity===item.entity&&c.path===item.path)){ alert('Already exists / 已存在'); return; }
-  if(compareItems.length>=2) compareItems.shift();
-  compareItems.push(item);
+  const pos=compareSlots.findIndex(c=>c&&c.entity===item.entity&&c.path===item.path);
+  if(pos>-1){ compareSlots[pos]=null; renderCompare(); return; }  /* 再点一次 = 移除 / click again to remove */
+  const empty=compareSlots.indexOf(null);
+  if(empty===-1){ alert('Compare slots are full (2) — remove one first. / 对比位已满（2 个），请先移除一个'); return; }
+  compareSlots[empty]=item;
   renderCompare();
   showLearnTab('compare');
 }
+function removeCompare(i){ compareSlots[i]=null; renderCompare(); }
+function clearCompare(){ compareSlots=[null,null]; renderCompare(); }
 function renderCompare(){
   const leftSlot=document.getElementById('compareLeft');
   const rightSlot=document.getElementById('compareRight');
   const table=document.getElementById('compareTable');
-  if(!compareItems.length){ leftSlot.innerHTML='Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加'; rightSlot.innerHTML='Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加'; table.classList.add('hidden'); return; }
-  leftSlot.innerHTML=compareItems[0]?`<b>${compareItems[0].entity}</b><div class="meta">${compareItems[0].path}:${compareItems[0].lines}</div>`:'Add to left / 点击左侧添加';
-  rightSlot.innerHTML=compareItems[1]?`<b>${compareItems[1].entity}</b><div class="meta">${compareItems[1].path}:${compareItems[1].lines}</div>`:'Add to right / 点击右侧添加';
-  if(compareItems.length===2){
-    const a=compareItems[0], b=compareItems[1];
+  const slotHtml=(item,i)=>item
+    ? `<b>${item.entity}</b><div class="meta">${item.path}:${item.lines}</div><div style="margin-top:6px"><button class="small-btn ghost" onclick="removeCompare(${i})">✕ Remove / 移除</button></div>`
+    : 'Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加';
+  leftSlot.innerHTML=slotHtml(compareSlots[0],0);
+  rightSlot.innerHTML=slotHtml(compareSlots[1],1);
+  if(compareSlots[0]&&compareSlots[1]){
+    const a=compareSlots[0], b=compareSlots[1];
     table.classList.remove('hidden');
     table.innerHTML=
       `<table style="width:100%;font-size:13px;border-collapse:collapse">`+
@@ -402,38 +413,76 @@ function renderCompare(){
       `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px">Key Params / 关键参数</td><td>${(a.params||[]).join(', ')||'TODO'}</td><td>${(b.params||[]).join(', ')||'TODO'}</td></tr>`+
       `<tr><td style="padding:6px">Math Description / 数学描述</td><td><pre style="white-space:pre-wrap">${escapeHtml(a.docstring_math||a.code||'—')}</pre></td><td><pre style="white-space:pre-wrap">${escapeHtml(b.docstring_math||b.code||'—')}</pre></td></tr>`+
       `</table>`;
+  } else {
+    table.classList.add('hidden');
+    table.innerHTML="";
   }
 }
 
-function renderPath(){
+async function renderPath(){
   const box=document.getElementById('pathTree');
-  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to generate its learning path (backend TODO) / 选择一个算法后生成学习路径（后端待实现）</div>'; return; }
-  const fam=selectedItem.family||'Unknown family / 未知算法族';
-  const mod=selectedItem.module||selectedItem.path?.split('/')[0]||'Unknown module / 未知模块';
-  box.innerHTML=
-    `<div><b>${selectedItem.entity}</b></div>`+
-    `<div class="tree">`+
-    `<div>Prerequisites: Linear Algebra / Probability / Optimization / 前置：线性代数 / 概率基础 / 优化方法</div>`+
-    `<div class="tree">→ ${fam} basics: loss function + parameter estimation / ${fam} 基础：损失函数 + 参数估计</div>`+
-    `<div class="tree">→ ${mod} module: survey of sibling algorithms / ${mod} 模块：同类算法族综述</div>`+
-    `<div class="tree">→ <b>${selectedItem.entity}</b>: concrete implementation & code / ${selectedItem.entity}：具体实现与代码</div>`+
-    `</div>`+
-    `<p class="hint">Note: a real path needs the backend to parse docstring + reference edges; this is a sketch. / 注：真实路径需后端解析 docstring 与引用边自动生成；当前为示意结构。</p>`;
+  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to generate its learning path / 选择一个算法后生成学习路径</div>'; return; }
+  box.innerHTML="<i class='meta'>Generating path… / 正在生成学习路径…</i>";
+  try{
+    const m=selectedItem.module||"", a=selectedItem.entity||"";
+    const r=await fetch(`${BASE}/api/learn/path?module=${encodeURIComponent(m)}&algorithm=${encodeURIComponent(a)}`);
+    const j=await r.json();
+    const steps=j.path||[];
+    if(!steps.length){ box.innerHTML="<i class='meta'>No path data for this module / 该模块暂无路径数据</i>"; return; }
+    box.innerHTML=
+      `<div><b>${escapeHtml(j.algorithm||a)}</b> <span class="meta">· ${escapeHtml(j.module||m)} · ${steps.length} steps / 步</span></div>`+
+      steps.map(s=>{
+        const items=(s.items||[]).map(it=>
+          `<div class="tree" style="margin-left:14px">· <a href="javascript:void 0" onclick="searchFor('${escapeHtml(it.name||"")}')"><b>${escapeHtml(it.name||"")}</b></a> <span class="meta">${escapeHtml(it.note||"")}</span></div>`).join("");
+        return `<div class="tree"><b>Step ${s.step} / 第${s.step}步：${escapeHtml(s.title||"")}</b>`+
+          (s.detail?`<div class="meta">${escapeHtml(s.detail)}</div>`:"")+items+`</div>`;
+      }).join("")+
+      `<p class="hint">Auto-generated from DB metadata / 由数据库元数据自动生成</p>`;
+  }catch(e){ box.innerHTML="<i class='meta'>Path failed / 路径生成失败："+e.message+"</i>"; }
 }
-function renderRec(){
+function searchFor(q){ document.getElementById("query").value=q; doSearch(); }
+async function renderRec(){
   const box=document.getElementById('recList');
-  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to see recommendations (backend TODO) / 选择一个算法后显示相似推荐（后端待实现）</div>'; return; }
-  box.innerHTML=
-    `<div class="card"><b>Same-module rec / 同模块推荐</b><div class="meta">Other algorithms in the same ${selectedItem.module||'—'} module (backend TODO) / 与 ${selectedItem.entity} 同属 ${selectedItem.module||'—'} 的其他算法（后端待实现）</div></div>`+
-    `<div class="card"><b>Same-family rec / 同算法族推荐</b><div class="meta">Comparable algorithms in the same ${selectedItem.family||'—'} family (backend TODO) / 同属 ${selectedItem.family||'—'} 的可比算法（后端待实现）</div></div>`+
-    `<div class="card"><b>Co-reference rec / 引用共现推荐</b><div class="meta">Utility functions / base classes often referenced with ${selectedItem.entity} (backend TODO) / 常与 ${selectedItem.entity} 一起被引用的工具函数 / 基类（后端待实现）</div></div>`;
+  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to see recommendations / 选择一个算法后显示相似推荐</div>'; return; }
+  box.innerHTML="<i class='meta'>Computing recommendations… / 正在计算推荐…</i>";
+  try{
+    const a=selectedItem.entity||"", m=selectedItem.module||"";
+    const r=await fetch(`${BASE}/api/learn/similar?algorithm=${encodeURIComponent(a)}&module=${encodeURIComponent(m)}&top_k=5`);
+    const j=await r.json();
+    if(j.error){ box.innerHTML="<i class='meta'>"+escapeHtml(j.error)+"</i>"; return; }
+    const row=(it,extra)=>`<div class="func-item"><a href="javascript:void 0" onclick="searchFor('${escapeHtml(it.name||"")}')"><b>${escapeHtml(it.name||"")}</b></a> <span class="meta">${escapeHtml(it.module||"")}${extra}</span></div>`;
+    box.innerHTML=
+      `<div class="card"><b>Similar by embedding / 语义相似（余弦）</b>`+
+        ((j.semantic||[]).length? j.semantic.map(it=>row(it,` · score ${it.score}`)).join("") : "<div class='meta'>—</div>")+`</div>`+
+      `<div class="card"><b>Same module / 同模块推荐</b>`+
+        ((j.same_module||[]).length? j.same_module.map(it=>row(it,"")).join("") : "<div class='meta'>—</div>")+`</div>`+
+      `<div class="card"><b>Same family / 同算法族推荐</b>`+
+        ((j.same_family||[]).length? j.same_family.map(it=>row(it,"")).join("") : "<div class='meta'>—</div>")+`</div>`+
+      `<div class="card"><b>Co-reference / 引用共现推荐</b>`+
+        ((j.coreference||[]).length? j.coreference.map(it=>row(it,` · shared ${it.shared_count}: ${escapeHtml((it.shared||[]).join(", "))}`)).join("") : "<div class='meta'>—</div>")+`</div>`;
+  }catch(e){ box.innerHTML="<i class='meta'>Recommendation failed / 推荐失败："+e.message+"</i>"; }
 }
-function renderGraph(){
+async function renderGraph(){
   const box=document.getElementById('callGraph');
-  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to render its call graph (backend TODO) / 选择一个算法后渲染调用关系图（后端待实现）</div>'; return; }
-  box.innerHTML=
-    `<pre style="text-align:left">${selectedItem.entity}\n├── inherits ← (backend TODO / 待后端解析)\n├── calls ← (backend TODO / 待后端解析)\n└── called-by ← (backend TODO / 待后端解析)</pre>`+
-    `<p class="hint">Note: a real call graph needs the backend to resolve import / class / function edges; placeholder shown. / 注：真实调用图需后端解析 import / class / function 引用边；当前为占位示意。</p>`;
+  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to render its call graph / 选择一个算法后渲染调用关系图</div>'; return; }
+  box.innerHTML="<i class='meta'>Resolving call graph… / 正在解析调用关系…</i>";
+  try{
+    const m=selectedItem.module||"", a=selectedItem.entity||"";
+    const r=await fetch(`${BASE}/api/learn/call_graph?module=${encodeURIComponent(m)}&algorithm=${encodeURIComponent(a)}`);
+    const j=await r.json();
+    if(!j.nodes||!j.nodes.length){ box.innerHTML="<i class='meta'>No graph data / 无图数据</i>"; return; }
+    const g={};
+    (j.edges||[]).forEach(e=>{ (g[e.rel]=g[e.rel]||[]).push(e.to); });
+    const line=(icon,rel,arr)=>arr&&arr.length?
+      `<div class="tree">├── ${icon} ${rel} (${arr.length}): ${arr.map(n=>`<a href="javascript:void 0" onclick="searchFor('${escapeHtml(n)}')">${escapeHtml(n)}</a>`).join(", ")}</div>`:"";
+    box.innerHTML=
+      `<div><b>${escapeHtml(j.algorithm)}</b> <span class="meta">· ${j.nodes.length} nodes / 节点 · ${j.edges.length} edges / 边</span></div>`+
+      `<div class="tree"><b>${escapeHtml(j.algorithm)}</b></div>`+
+      line("⬆","inherits / 继承",g["inherits"])+
+      line("→","calls / 调用",g["calls"])+
+      line("◇","methods / 成员方法",g["method"])+
+      `<p class="hint">${j.summary?`methods ${j.summary.methods} · external calls ${j.summary.external_calls} · unresolved symbols ${j.summary.unresolved_symbols}`:""} · Auto-resolved from DB call edges / 由数据库调用边自动解析</p>`;
+  }catch(e){ box.innerHTML="<i class='meta'>Graph failed / 调用图失败："+e.message+"</i>"; }
 }
 
 function escapeHtml(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
