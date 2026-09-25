@@ -125,7 +125,7 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
             if not fn.endswith(".py"):
                 continue
             p = os.path.join(root, fn)
-            rel = os.path.relpath(p, tmp)
+            rel = os.path.relpath(p, tmp).replace(os.sep, "/")  # Windows 兼容：反斜杠统一为 /
             parts = rel.split("/")
             # numpy-ml clone 后顶层是 Python 包目录名（numpy_ml），真正的算法子模块在下一层
             if len(parts) >= 3 and parts[0] in ("numpy_ml", "numpy-ml"):
