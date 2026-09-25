@@ -212,6 +212,12 @@ def eval_modules_endpoint():
     return eval_test.evaluate_modules()
 
 
+@app.get("/api/eval/class_search")
+def eval_class_search_endpoint(kw_weight: float = 0.2, top_k: int = 5):
+    """3.2 分类检索评测；kw_weight 为 keyword 通道权重，semantic = 1 - kw_weight。"""
+    return eval_test.evaluate_class_search(kw_weight=kw_weight, top_k=top_k)
+
+
 @app.get("/api/smoke")
 def smoke_endpoint():
     return eval_test.smoke_test()

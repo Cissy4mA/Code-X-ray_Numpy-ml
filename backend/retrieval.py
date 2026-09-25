@@ -129,6 +129,16 @@ def _one_line_meaning(code_text, embedding_text, docstring_math):
 def class_search(req):
     """3.2 新设计：只返回分类（完整算法），每个分类附带其全部成员函数。
     游离函数（不属于任何分类）作为 'free_functions' 单独返回，仅在相关时列出。"""
+    # 默认 keyword 权重 0.2，semantic 0.8；由 eval 网格搜索确定，eval 脚本可覆盖
+    kw_weight = getattr(req, "kw_weight", 0.2)
+    return _class_search_weighted(req, kw_weight=kw_weight)
+
+
+def _class_search_weighted(req, kw_weight=0.2):
+    """3.2 检索内部实现，支持 keyword/semantic 融合权重调参。
+
+    kw_weight: keyword 通道权重；semantic 权重 = 1 - kw_weight。
+    """
     qvec = parser.embed(req.query)
     conn = db.get_conn()
     cur = conn.cursor()
@@ -185,10 +195,11 @@ def class_search(req):
     kw_vals = [x["keyword"] for x in results] or [0]
     smin, smax = min(sem_vals), max(sem_vals)
     kmin, kmax = min(kw_vals), max(kw_vals)
+    sem_weight = 1.0 - kw_weight
     for x in results:
         sn = (x["semantic"] - smin) / (smax - smin) if smax > smin else 0
         kn = (x["keyword"] - kmin) / (kmax - kmin) if kmax > kmin else 0
-        x["fused"] = round(0.5 * sn + 0.5 * kn, 4)
+        x["fused"] = round(kw_weight * kn + sem_weight * sn, 4)
     results.sort(key=lambda d: d["fused"], reverse=True)
     top_classes = results[:req.top_k]
 
@@ -256,7 +267,7 @@ def class_search(req):
         for x in free_results:
             sn = (x["semantic"] - fsmin) / (fsmax - fsmin) if fsmax > fsmin else 0
             kn = (x["keyword"] - fkmin) / (fkmax - fkmin) if fkmax > fkmin else 0
-            x["fused"] = round(0.5 * sn + 0.5 * kn, 4)
+            x["fused"] = round(kw_weight * kn + sem_weight * sn, 4)
         free_results.sort(key=lambda d: d["fused"], reverse=True)
         # 只保留真正相关的：关键词命中或语义分>0.3
         free_functions = [

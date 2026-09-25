@@ -41,9 +41,10 @@
  .tab:hover{background:#f8faff}
  .bar{height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin:3px 0}
  .bar>div{height:100%;background:#2563eb}
- .mode-btn{background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;padding:6px 12px;margin-right:4px}
- .mode-btn.active{background:#2563eb;color:#fff;border-color:#2563eb}
- .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:10px}
+.mode-btn{background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;padding:6px 12px;margin-right:4px}
+.mode-btn.active{background:#2563eb;color:#fff;border-color:#2563eb}
+.code-block-scroll{max-height:360px;overflow-y:auto;white-space:pre;font-family:monospace;font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:10px}
  .stat{border:1px solid #e1e4e8;border-radius:8px;padding:10px;text-align:center}
  .stat .num{font-size:20px;font-weight:700;color:#2563eb}
  .stat .lab{font-size:12px;color:#666}
@@ -134,7 +135,6 @@
 <h2 data-page-node-id="x7">4. Learn / 学习</h2>
 <div class="tabs" id="learnTabs">
   <span class="tab active" onclick="showLearnTab('math')">Math Card / 数学卡片</span>
-  <span class="tab" onclick="showLearnTab('compare')">Compare / 算法对比</span>
   <span class="tab" onclick="showLearnTab('path')">Path / 学习路径</span>
   <span class="tab" onclick="showLearnTab('rec')">Recommend / 相似推荐</span>
   <span class="tab" onclick="showLearnTab('graph')">Call Graph / 调用图</span>
@@ -318,7 +318,6 @@ async function doSearch(){
           `<div class="meta" style="margin-top:6px">Family / 算法族：${x.family||"—"} · Task / 任务：${x.task||"—"}</div>`+
           `<div class="meta" style="margin-top:4px">Key Params / 关键参数：${params}</div>`+
           `<div class="meta" style="margin-top:4px">Math Methods / 数学方法：${mathMethods}</div>`+
-          `<button class="small-btn ghost" style="margin-top:8px" onclick="event.stopPropagation();addCompare(${i})">+ Compare / 对比</button>`+
         `</div>`+
         `<div class="class-funcs" onclick="event.stopPropagation()">`+
           `<div class="meta" style="margin-bottom:6px;font-weight:600">Functions / 函数 (${x.functions?x.functions.length:0})</div>`+
@@ -347,7 +346,7 @@ function showDetail(x){
   const edges=(x.ref_edges||[]).join(", ")||"（backend TODO: resolve import / inheritance / call edges / 待后端补全：从 import / 继承 / 调用解析引用关系）";
   const math=escapeHtml(x.docstring_math||x.docstring||x.code||"（backend TODO: math description / 待后端补全数学描述）");
   d.innerHTML=
-    `<div class="code-actions"><button class="small-btn" onclick="copyCode()">Copy Code / 复制代码</button><button class="small-btn ghost" onclick="addCompareByItem(selectedItem)">+ Add to Compare / 加入对比</button></div>`+
+    `<div class="code-actions"><button class="small-btn" onclick="copyCode()">Copy Code / 复制代码</button></div>`+
     `<div class="kv"><b>Name / 名称</b>${x.entity||"(unnamed / 未命名)"}</div>`+
     `<div class="kv"><b>Module / 模块</b>${x.module||x.path||"—"}</div>`+
     `<div class="kv"><b>Family / 算法族</b>${x.family||"—"}</div>`+
@@ -358,7 +357,7 @@ function showDetail(x){
     `<div class="kv"><b>Math Description / 数学描述</b><pre id="mathBlock">${math}</pre></div>`+
     `<div class="kv"><b>References / 参考文献</b>${refs}</div>`+
     `<div class="kv"><b>Reference Edges / 引用关系</b>${edges}</div>`+
-    `<div class="kv"><b>Source / 源码</b><pre id="codeBlock">${escapeHtml(x.code||"（no source / 无源码）")}</pre></div>`;
+    `<div class="kv"><b>Source / 源码</b><pre id="codeBlock" class="code-block-scroll">${escapeHtml(x.code||"（no source / 无源码）")}</pre></div>`;
   if(window.renderMathInElement){ renderMathInElement(d,{delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}]}); }
 }
 function copyCode(){ const c=document.getElementById('codeBlock'); if(c){ navigator.clipboard.writeText(c.innerText).then(()=>alert('Copied to clipboard / 已复制到剪贴板')); } }
