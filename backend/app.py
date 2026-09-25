@@ -190,13 +190,18 @@ def learn_compare(module: str = ""):
 
 
 @app.get("/api/learn/path")
-def learn_path(module: str = ""):
-    return learn.learning_path(module or None)
+def learn_path(module: str = "", algorithm: str = ""):
+    return learn.learning_path(module or None, algorithm or None)
+
+
+@app.get("/api/learn/similar")
+def learn_similar(algorithm: str = "", module: str = "", top_k: int = 3):
+    return learn.similar(algorithm, module, top_k)
 
 
 @app.get("/api/learn/call_graph")
-def learn_call_graph(module: str = ""):
-    return learn.call_graph(module)
+def learn_call_graph(module: str = "", algorithm: str = ""):
+    return learn.call_graph(module, algorithm or None)
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,21 @@
     }
   },
   "modules": {
+    "lda": {
+      "family": "Topic Models",
+      "cards": [
+        {
+          "algorithm": "LDA",
+          "summary": "变分 EM 近似推断的主题模型：文档=主题分布，主题=词分布",
+          "intuition": "把每篇文档想象成先抽主题、再抽词的两层抽奖。LDA 的难点在于后验不可解析，代码里用变分分布去逼近它，E 步更新每篇文档的变分参数，M 步更新全局的 alpha/beta。",
+          "formula": "p(θ,z,w|α,β) ∝ p(θ|α)·∏p(z_n|θ)·p(w_n|z_n,β)"
+        }
+      ],
+      "compare": [
+        {"algorithm": "LDA", "pros": "变分推断速度稳定、可批量", "cons": "近似有偏差", "use_when": "文档量大、需要确定性训练时"},
+        {"algorithm": "SmoothedLDA", "pros": "Gibbs 采样实现直观、平滑项避免零概率", "cons": "收敛需烧入期、较慢", "use_when": "教学演示、小语料"}
+      ]
+    },
     "neural_nets": {
       "family": "Neural Networks",
       "cards": [
