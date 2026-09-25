@@ -59,6 +59,12 @@
  .score-row{display:flex;align-items:center;gap:8px;font-size:12px;margin:2px 0}
  .score-row .label{width:60px;color:#666}
  .score-row .bar{flex:1;height:8px}
+ .score-rows{display:flex;gap:8px;margin:8px 0}
+ .class-info .score-row{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;margin:0}
+ .class-info .score-row .label{width:auto;font-size:11px}
+ .class-info .score-row .bar{width:100%;flex:none}
+ .class-info .score-row .score-hd{display:flex;justify-content:space-between;align-items:center}
+ .class-info .score-row .value{font-size:12px;color:#334155}
  .tree{padding-left:16px;border-left:2px solid #e2e8f0;margin-left:6px}
  .readme{max-height:260px;overflow-y:auto;border:1px solid #e1e4e8;border-radius:6px;padding:10px;background:#fff;font-size:13px}
  .readme p{margin:6px 0}
@@ -315,9 +321,11 @@ async function doSearch(){
         `<div class="class-main">`+
           `<div class="class-info">`+
             `<div><span class="tag">${x.type||"class"}</span><b>${x.entity||"(unnamed / 未命名)"}</b> <span class="meta">${x.path||""}:${x.lines||""}</span></div>`+
-            `<div class="score-row"><span class="label">fused</span><div class="bar"><div style="width:${Math.min(100,((x.fused||0)/maxScore)*100)}%"></div></div><span>${(x.fused??"?").toString().slice(0,5)}</span></div>`+
-            `<div class="score-row"><span class="label">keyword</span><div class="bar"><div style="width:${Math.min(100,((x.keyword||0)/maxScore)*100)}%;background:#16a34a"></div></div><span>${(x.keyword??"?").toString().slice(0,5)}</span></div>`+
-            `<div class="score-row"><span class="label">semantic</span><div class="bar"><div style="width:${Math.min(100,((x.semantic||0)/maxScore)*100)}%;background:#9333ea"></div></div><span>${(x.semantic??"?").toString().slice(0,5)}</span></div>`+
+            `<div class="score-rows">`+
+              `<div class="score-row"><div class="score-hd"><span class="label">fused</span><span class="value">${(x.fused??"?").toString().slice(0,5)}</span></div><div class="bar"><div style="width:${Math.min(100,((x.fused||0)/maxScore)*100)}%"></div></div></div>`+
+              `<div class="score-row"><div class="score-hd"><span class="label">keyword</span><span class="value">${(x.keyword??"?").toString().slice(0,5)}</span></div><div class="bar"><div style="width:${Math.min(100,((x.keyword||0)/maxScore)*100)}%;background:#16a34a"></div></div></div>`+
+              `<div class="score-row"><div class="score-hd"><span class="label">semantic</span><span class="value">${(x.semantic??"?").toString().slice(0,5)}</span></div><div class="bar"><div style="width:${Math.min(100,((x.semantic||0)/maxScore)*100)}%;background:#9333ea"></div></div></div>`+
+            `</div>`+
             `<div class="meta" style="margin-top:6px">Family / 算法族：${x.family||"—"} · Task / 任务：${x.task||"—"}</div>`+
           `</div>`+
           `<div class="class-code"><pre>${escapeHtml(x.code||"（no source / 无源码）")}</pre></div>`+
