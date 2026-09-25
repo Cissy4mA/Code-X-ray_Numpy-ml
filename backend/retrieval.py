@@ -96,12 +96,181 @@ def rank(req):
     return results, qvec
 
 
-def run_search(req):
-    """普通搜索：返回 top_k 结果（剔除完整向量）。"""
-    results, _ = rank(req)
+def _one_line_meaning(code_text, embedding_text, docstring_math):
+    """从 chunk 的 docstring / embedding_text / docstring_math 中抽取一句可读含义，用于函数清单。"""
+    if docstring_math:
+        first = docstring_math.strip().splitlines()[0].strip()
+        if len(first) >= 8:
+            return first[:180]
+    if code_text:
+        # 抽取第一个三引号 docstring 的首句（最贴近人工注释原意）
+        for quote in ('"""', "'''"):
+            start = code_text.find(quote)
+            if start != -1:
+                end = code_text.find(quote, start + 3)
+                if end != -1:
+                    doc = code_text[start + 3:end].strip()
+                    if doc:
+                        parts = re.split(r"(?<=[.!?])\s+", doc.replace("\n", " "))
+                        sent = parts[0].strip()
+                        if len(sent) >= 8:
+                            return sent[:180]
+    if embedding_text:
+        # embedding_text 形如 "Family algorithm for task. Class name: Name. <docstring前两句>. Key parameters: ..."
+        rest = re.sub(r"^.*? algorithm for .*?\. Class name: .*?\.\s*", "", embedding_text)
+        m = re.match(r"([^\.\n]{5,}?[\.!?])(?:\s|$)", rest)
+        if m:
+            sent = m.group(1).strip()
+            if not sent.lower().startswith("key parameters") and len(sent) >= 8:
+                return sent[:180]
+    return ""
+
+
+def class_search(req):
+    """3.2 新设计：只返回分类（完整算法），每个分类附带其全部成员函数。
+    游离函数（不属于任何分类）作为 'free_functions' 单独返回，仅在相关时列出。"""
+    qvec = parser.embed(req.query)
+    conn = db.get_conn()
+    cur = conn.cursor()
+
+    non_algo = tuple(parser.NON_ALGO_MODULES)
+    where = "(c.module NOT IN %s OR c.module='')"; params = [non_algo]
+    if req.module:
+        where = "c.module=%s"; params = [req.module]
+    if req.family:
+        where += " AND c.family=%s"; params.append(req.family)
+    if req.task:
+        where += " AND c.task=%s"; params.append(req.task)
+
+    cur.execute(
+        "SELECT c.id,c.name,c.module,c.family,c.task,c.math_methods,c.params,c.`references`,"
+        "c.docstring_math,c.complexity,c.ref_edges,c.call_edges,c.start_line,c.end_line,"
+        "c.code_text,c.embedding_text,c.embedding_json,f.path "
+        "FROM algorithms c JOIN code_files f ON c.file_id=f.id WHERE " + where,
+        params,
+    )
+    rows = cur.fetchall()
+
+    if rows:
+        cur.execute(
+            "SELECT id, MATCH(code_text,name,embedding_text) AGAINST(%s IN BOOLEAN MODE) AS kw "
+            "FROM algorithms", (req.query,)
+        )
+        kw_map = {r[0]: r[1] for r in cur.fetchall()}
+    else:
+        kw_map = {}
+
+    results = []
+    for r in rows:
+        (cid, name, module, family, task, math_methods, params_col, references,
+         docstring_math, complexity, ref_edges, call_edges, s, e, code, etext, embj, path) = r
+        emb = json.loads(embj) if embj else [0.0] * parser.DIM
+        sem = parser.cosine(qvec, emb)
+        kw = kw_map.get(cid, 0.0)
+        results.append({
+            "id": cid, "entity": name, "type": "class", "parent_class": None,
+            "module": module, "family": family, "task": task,
+            "math_methods": json.loads(math_methods) if math_methods else [],
+            "params": [p.strip() for p in params_col.split(",") if p.strip()] if params_col else [],
+            "references": json.loads(references) if references else [],
+            "docstring_math": docstring_math or "",
+            "complexity": complexity,
+            "ref_edges": ref_edges,
+            "call_edges": call_edges,
+            "lines": f"{s}-{e}", "path": path, "code": code,
+            "keyword": round(kw, 4), "semantic": round(sem, 4),
+        })
+
+    sem_vals = [x["semantic"] for x in results] or [0]
+    kw_vals = [x["keyword"] for x in results] or [0]
+    smin, smax = min(sem_vals), max(sem_vals)
+    kmin, kmax = min(kw_vals), max(kw_vals)
     for x in results:
-        x.pop("vector", None)  # 普通搜索不暴露完整向量
-    return {"query": req.query, "results": results[: req.top_k]}
+        sn = (x["semantic"] - smin) / (smax - smin) if smax > smin else 0
+        kn = (x["keyword"] - kmin) / (kmax - kmin) if kmax > kmin else 0
+        x["fused"] = round(0.5 * sn + 0.5 * kn, 4)
+    results.sort(key=lambda d: d["fused"], reverse=True)
+    top_classes = results[:req.top_k]
+
+    # 拉取每个分类的成员函数
+    for cls in top_classes:
+        cur.execute(
+            "SELECT name, docstring_math, embedding_text, code_text FROM functions "
+            "WHERE module=%s AND parent_class=%s ORDER BY start_line",
+            (cls["module"], cls["entity"]),
+        )
+        cls["functions"] = [
+            {"name": fname, "meaning": _one_line_meaning(fcode or "", etxt or "", fdoc or "")}
+            for fname, fdoc, etxt, fcode in cur.fetchall()
+        ]
+
+    # 游离函数：仅当与查询相关时才列出；module 过滤与分类一致
+    free_functions = []
+    free_where = "(c.parent_class IS NULL OR c.parent_class='') AND (c.module NOT IN %s OR c.module='')"
+    free_params = [non_algo]
+    if req.module:
+        free_where += " AND c.module=%s"; free_params.append(req.module)
+    if req.family:
+        free_where += " AND c.family=%s"; free_params.append(req.family)
+    if req.task:
+        free_where += " AND c.task=%s"; free_params.append(req.task)
+    cur.execute(
+        "SELECT c.id,c.name,c.module,c.family,c.task,c.docstring_math,c.embedding_text,"
+        "c.embedding_json,c.code_text,c.start_line,c.end_line,f.path "
+        "FROM functions c JOIN code_files f ON c.file_id=f.id WHERE " + free_where,
+        free_params,
+    )
+    free_rows = cur.fetchall()
+    if free_rows:
+        kw_where = "parent_class IS NULL OR parent_class=''"
+        kw_params = []
+        if req.module:
+            kw_where += " AND module=%s"; kw_params.append(req.module)
+        cur.execute(
+            f"SELECT id, MATCH(code_text,name,embedding_text) AGAINST(%s IN BOOLEAN MODE) AS kw "
+            f"FROM functions WHERE {kw_where}",
+            (req.query,) + tuple(kw_params),
+        )
+        free_kw_map = {r[0]: r[1] for r in cur.fetchall()}
+    else:
+        free_kw_map = {}
+
+    free_results = []
+    for r in free_rows:
+        (fid, name, module, family, task, fdoc, femb_text, embj, code, s, e, path) = r
+        emb = json.loads(embj) if embj else [0.0] * parser.DIM
+        sem = parser.cosine(qvec, emb)
+        kw = free_kw_map.get(fid, 0.0)
+        free_results.append({
+            "id": fid, "entity": name, "type": "function", "module": module,
+            "family": family, "task": task, "path": path, "lines": f"{s}-{e}",
+            "code": code, "meaning": _one_line_meaning(code or "", femb_text or "", fdoc or ""),
+            "keyword": round(kw, 4), "semantic": round(sem, 4),
+        })
+
+    if free_results:
+        fsem = [x["semantic"] for x in free_results] or [0]
+        fkw = [x["keyword"] for x in free_results] or [0]
+        fsmin, fsmax = min(fsem), max(fsem)
+        fkmin, fkmax = min(fkw), max(fkw)
+        for x in free_results:
+            sn = (x["semantic"] - fsmin) / (fsmax - fsmin) if fsmax > fsmin else 0
+            kn = (x["keyword"] - fkmin) / (fkmax - fkmin) if fkmax > fkmin else 0
+            x["fused"] = round(0.5 * sn + 0.5 * kn, 4)
+        free_results.sort(key=lambda d: d["fused"], reverse=True)
+        # 只保留真正相关的：关键词命中或语义分>0.3
+        free_functions = [
+            x for x in free_results
+            if x["keyword"] > 0 or x["semantic"] > 0.3
+        ][:5]
+
+    conn.close()
+    return {"query": req.query, "results": top_classes, "free_functions": free_functions}
+
+
+def run_search(req):
+    """3.2 前端接口：返回分类（完整算法）及每个分类的成员函数，游离函数单独列出。"""
+    return class_search(req)
 
 
 def debug_chunks():

@@ -64,6 +64,16 @@
  .readme ul,.readme ol{margin:6px 0;padding-left:20px}
  .readme li{margin:2px 0}
  .readme h1,.readme h2,.readme h3{font-size:14px;margin:10px 0 6px}
+.class-card{display:flex;gap:0;align-items:stretch;padding:0;overflow:hidden}
+.class-main{flex:2;min-width:0;padding:12px;max-height:320px;overflow-y:auto}
+.class-funcs{flex:1;min-width:180px;max-width:280px;padding:12px;max-height:320px;overflow-y:auto;border-left:1px solid #e2e8f0;background:#f8fafc;border-radius:0 8px 8px 0}
+.func-item{margin:6px 0;padding-bottom:5px;border-bottom:1px solid #e2e8f0}
+.func-item:last-child{border-bottom:none}
+.func-name{font-family:monospace;font-size:12px;font-weight:600;color:#1e293b;word-break:break-all}
+.func-meaning{color:#64748b;font-size:11px;margin-top:2px;line-height:1.35}
+.free-section{margin-top:14px}
+.free-section h4{margin:0 0 6px;font-size:13px;color:#475569}
+.free-item{display:inline-block;margin:2px 6px 2px 0;padding:4px 8px;background:#f1f5f9;border-radius:4px;font-size:12px}
 </style>
 </head>
 <body data-page-node-id="Qqmpz4cdb5M5acz6I1QiBC">
@@ -109,7 +119,7 @@
 
 <!-- 3.2 Algorithm Search / 算法搜索 -->
 <h3>3.2 Algorithm Search / 算法搜索</h3>
-<p class="meta">Search inside a module (or all modules) and limit results to top-k. / 在指定模块或全部模块中搜索算法，限制返回数量。</p>
+<p class="meta">Search returns top-k <b>algorithm classes / 算法分类</b> (a complete algorithm). Each class card lists all its member functions on the right. / 返回前 k 个完整算法分类，每张卡片右侧列出该分类下的全部成员函数。</p>
 <div class="row">
   <div style="max-width:180px"><label class="meta">Module / 模块</label><select id="fModule">
     <option value="">All / 全部</option>
@@ -287,21 +297,43 @@ async function doSearch(){
     const r=await fetch(BASE+"/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const j=await r.json();
     currentResults=j.results||[];
-    if(!currentResults.length){ box.innerHTML="<i class='meta'>No results / 无结果</i>"; return; }
+    const freeFns=j.free_functions||[];
+    if(!currentResults.length && !freeFns.length){ box.innerHTML="<i class='meta'>No results / 无结果</i>"; return; }
     box.innerHTML="";
     currentResults.forEach((x,i)=>{
       const el=document.createElement("div");
-      el.className="card"; el.dataset.idx=i;
+      el.className="card class-card"; el.dataset.idx=i;
       const maxScore=Math.max(currentResults[0].fused||0, 0.0001);
-      el.innerHTML=`<div><span class="tag">${x.type||""}</span><b>${x.entity||"(unnamed / 未命名)"}</b> <span class="meta">${x.path||""}:${x.lines||""}</span></div>`+
-        `<div class="score-row"><span class="label">fused</span><div class="bar"><div style="width:${Math.min(100,((x.fused||0)/maxScore)*100)}%"></div></div><span>${(x.fused??"?").toString().slice(0,5)}</span></div>`+
-        `<div class="score-row"><span class="label">keyword</span><div class="bar"><div style="width:${Math.min(100,((x.keyword||0)/maxScore)*100)}%;background:#16a34a"></div></div><span>${(x.keyword??"?").toString().slice(0,5)}</span></div>`+
-        `<div class="score-row"><span class="label">semantic</span><div class="bar"><div style="width:${Math.min(100,((x.semantic||0)/maxScore)*100)}%;background:#9333ea"></div></div><span>${(x.semantic??"?").toString().slice(0,5)}</span></div>`+
-        `<pre>${escapeHtml(x.code||"").slice(0,260)}${(x.code||"").length>260?'…':''}</pre>`+
-        `<button class="small-btn ghost" onclick="event.stopPropagation();addCompare(${i})">+ Compare / 对比</button>`;
+      const funcs=(x.functions||[]).length
+        ? (x.functions||[]).map(f=>`<div class="func-item"><div class="func-name">${escapeHtml(f.name)}</div><div class="func-meaning">${escapeHtml(f.meaning||"—")}</div></div>`).join("")
+        : '<div class="func-item"><div class="func-meaning">No member functions / 无成员函数</div></div>';
+      const params=(x.params||[]).map(p=>`<span class="tag">${escapeHtml(p)}</span>`).join("")||"<span class='meta'>—</span>";
+      const mathMethods=(x.math_methods||[]).map(m=>`<span class="tag m">${escapeHtml(m)}</span>`).join("")||"<span class='meta'>—</span>";
+      el.innerHTML=
+        `<div class="class-main">`+
+          `<div><span class="tag">${x.type||"class"}</span><b>${x.entity||"(unnamed / 未命名)"}</b> <span class="meta">${x.path||""}:${x.lines||""}</span></div>`+
+          `<div class="score-row"><span class="label">fused</span><div class="bar"><div style="width:${Math.min(100,((x.fused||0)/maxScore)*100)}%"></div></div><span>${(x.fused??"?").toString().slice(0,5)}</span></div>`+
+          `<div class="score-row"><span class="label">keyword</span><div class="bar"><div style="width:${Math.min(100,((x.keyword||0)/maxScore)*100)}%;background:#16a34a"></div></div><span>${(x.keyword??"?").toString().slice(0,5)}</span></div>`+
+          `<div class="score-row"><span class="label">semantic</span><div class="bar"><div style="width:${Math.min(100,((x.semantic||0)/maxScore)*100)}%;background:#9333ea"></div></div><span>${(x.semantic??"?").toString().slice(0,5)}</span></div>`+
+          `<div class="meta" style="margin-top:6px">Family / 算法族：${x.family||"—"} · Task / 任务：${x.task||"—"}</div>`+
+          `<div class="meta" style="margin-top:4px">Key Params / 关键参数：${params}</div>`+
+          `<div class="meta" style="margin-top:4px">Math Methods / 数学方法：${mathMethods}</div>`+
+          `<button class="small-btn ghost" style="margin-top:8px" onclick="event.stopPropagation();addCompare(${i})">+ Compare / 对比</button>`+
+        `</div>`+
+        `<div class="class-funcs" onclick="event.stopPropagation()">`+
+          `<div class="meta" style="margin-bottom:6px;font-weight:600">Functions / 函数 (${x.functions?x.functions.length:0})</div>`+
+          funcs+
+        `</div>`;
       el.onclick=()=>{ document.querySelectorAll('.card').forEach(c=>c.classList.remove('active')); el.classList.add('active'); showDetail(x); };
       box.appendChild(el);
     });
+    if(freeFns.length){
+      const freeDiv=document.createElement("div");
+      freeDiv.className="free-section";
+      freeDiv.innerHTML='<h4>Module-level utility functions / 模块级工具函数</h4>'+
+        freeFns.map(f=>`<span class="free-item" title="${escapeHtml(f.meaning||'')}">${escapeHtml(f.entity)} <span class="meta">(${f.module||'—'})</span></span>`).join("");
+      box.appendChild(freeDiv);
+    }
   }catch(e){ box.innerHTML="<i class='meta'>Search failed / 检索失败："+e.message+"</i>"; }
 }
 
