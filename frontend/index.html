@@ -173,10 +173,11 @@
 <!-- 4. Learn / 学习 -->
 <h2 data-page-node-id="x7">4. Learn / 学习</h2>
 <div class="tabs" id="learnTabs">
-  <span class="tab active" onclick="showLearnTab('math')">Math Card / 数学卡片</span>
-  <span class="tab" onclick="showLearnTab('path')">Path / 学习路径</span>
-  <span class="tab" onclick="showLearnTab('rec')">Recommend / 相似推荐</span>
-  <span class="tab" onclick="showLearnTab('graph')">Call Graph / 调用图</span>
+    <span class="tab active" onclick="showLearnTab('math')">Math Card / 数学卡片</span>
+    <span class="tab" onclick="showLearnTab('compare')">Compare / 算法对比</span>
+    <span class="tab" onclick="showLearnTab('path')">Path / 学习路径</span>
+    <span class="tab" onclick="showLearnTab('rec')">Recommend / 相似推荐</span>
+    <span class="tab" onclick="showLearnTab('graph')">Call Graph / 调用图</span>
 </div>
 <div id="learnBox" class="panel">
   <div id="learnMath">
@@ -356,6 +357,9 @@ async function doSearch(){
               `<div class="score-row"><div class="score-hd"><span class="label">semantic</span><span class="value">${(x.semantic??"?").toString().slice(0,5)}</span></div><div class="bar"><div style="width:${Math.min(100,((x.semantic||0)/maxScore)*100)}%;background:#9333ea"></div></div></div>`+
             `</div>`+
             `<div class="meta" style="margin-top:6px">Family / 算法族：${x.family||"—"} · Task / 任务：${x.task||"—"}</div>`+
+            `<div class="code-actions" style="margin-top:8px">` +
+            `<button class="small-btn ghost" onclick="event.stopPropagation(); addCompare(${i})">+ Compare / 加入对比</button>` +
+            `</div>` +
           `</div>`+
           `<div class="class-code"><pre>${escapeHtml(x.code||"（no source / 无源码）")}</pre></div>`+
         `</div>`+
