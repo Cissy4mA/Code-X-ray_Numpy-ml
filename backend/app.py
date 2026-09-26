@@ -205,8 +205,8 @@ def learn_path(module: str = ""):
 
 
 @app.get("/api/learn/call_graph")
-def learn_call_graph(module: str = ""):
-    return learn.call_graph(module)
+def learn_call_graph(module: str = "", entity: str = "", path: str = ""):
+    return learn.call_graph(module=module, entity=entity, path=path)
 
 
 # ---------------------------------------------------------------------------

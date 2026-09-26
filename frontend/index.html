@@ -33,6 +33,12 @@
  .detail{border:1px solid #2563eb;background:#f8faff;border-radius:8px;padding:14px;margin-top:10px}
  .kv{margin:6px 0;font-size:13px}
  .kv b{display:inline-block;width:90px;color:#475569}
+ .learn-section{margin:14px 0;padding:12px 14px;border:1px solid #e2e8f0;border-radius:8px;background:#fff}
+ .learn-section h4{margin:0 0 8px;font-size:14px;color:#0f172a}
+ .formula{padding:10px 12px;margin:7px 0;background:#f8fafc;border-left:3px solid #2563eb;border-radius:4px;font-family:Georgia,serif}
+ .code-map{display:grid;grid-template-columns:minmax(180px,1fr) 2fr;gap:8px;margin:6px 0}
+ .code-map code{background:#f1f5f9;padding:6px;border-radius:4px;white-space:pre-wrap}
+ .learn-note{font-size:12px;color:#64748b;margin-top:6px}
  .hidden{display:none}
  #importStatus{font-size:12px;color:#16a34a;margin-top:6px}
  .tabs{display:flex;gap:4px;border-bottom:1px solid #e1e4e8;margin:10px 0 0;flex-wrap:wrap}
@@ -59,7 +65,27 @@
  .score-row .label{width:60px;color:#666}
  .score-row .bar{flex:1;height:8px}
  .tree{padding-left:16px;border-left:2px solid #e2e8f0;margin-left:6px}
-</style>
+ .path-step{display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:start;margin:12px 0}
+ .path-number{background:#dbeafe;color:#1d4ed8;border-radius:50%;width:32px;height:32px;display:grid;place-items:center;font-weight:700}
+ .path-node{border:1px solid #cbd5e1;border-radius:8px;padding:12px;background:#fff;width:100%;text-align:left;color:#1e293b;margin:0;font-size:14px}
+ .path-node:hover,.path-node[aria-expanded="true"]{border-color:#2563eb;background:#eff6ff}
+ .path-detail{padding:10px 12px;border:1px solid #dbeafe;border-top:0;border-radius:0 0 8px 8px;font-size:13px}
+ .path-status{font-size:12px;color:#64748b;margin-top:6px}
+ .path-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+ .path-actions button{margin:0}
+ .graph-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}
+ .graph-stat{border:1px solid #dbeafe;background:#f8fbff;border-radius:8px;padding:10px;text-align:center}
+ .graph-stat b{display:block;font-size:18px;color:#2563eb}
+ .graph-cols{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:12px;align-items:start;margin-top:12px}
+ .graph-col{border:1px solid #e2e8f0;border-radius:8px;padding:10px;background:#fff;min-height:100px}
+ .graph-col h4{margin:0 0 8px;font-size:13px}
+ .graph-node{border:1px solid #cbd5e1;border-radius:7px;padding:8px;margin:7px 0;background:#f8fafc;cursor:pointer}
+ .graph-node:hover{border-color:#2563eb;background:#eff6ff}
+ .graph-node.root{border:2px solid #2563eb;background:#eff6ff}
+ .graph-arrow{text-align:center;color:#64748b;font-size:12px;margin:2px 0}
+ .graph-unresolved{margin-top:12px;padding:10px;border:1px dashed #cbd5e1;border-radius:8px;background:#fafafa}
+ @media(max-width:800px){.graph-cols{grid-template-columns:1fr}.graph-summary{grid-template-columns:1fr}}
+ </style>
 </head>
 <body data-page-node-id="Qqmpz4cdb5M5acz6I1QiBC">
 <h1 data-page-node-id="a8xWFHwY8bkk5bCNk9rkCp">Code X-Ray</h1>
@@ -153,7 +179,7 @@
   </div>
   <div id="learnGraph" class="hidden">
     <p class="meta">Visualize inheritance, call and reference relations between classes. / 可视化展示类与类之间的继承、调用与引用关系。</p>
-    <div id="callGraph" class="placeholder">Select an algorithm to render its call graph (backend TODO) / 选择一个算法后渲染调用关系图（后端待实现）</div>
+    <div id="callGraph" class="placeholder">Select an algorithm to render its call graph / 选择一个算法后渲染调用关系图</div>
   </div>
 </div>
 
@@ -294,28 +320,99 @@ async function doSearch(){
   }catch(e){ box.innerHTML="<i class='meta'>Search failed / 检索失败："+e.message+"</i>"; }
 }
 
+// Learn V2 · Step 1: normalize fields returned as arrays, JSON strings, or plain text.
+function learnList(value){
+  if(value == null || value === "") return [];
+  if(Array.isArray(value)) return value.flatMap(learnList);
+  if(typeof value === "string"){
+    const raw=value.trim();
+    if(!raw) return [];
+    if(raw.startsWith("[") || raw.startsWith("{")){
+      try { return learnList(JSON.parse(raw)); } catch(_error) { /* retain raw text */ }
+    }
+    return [raw];
+  }
+  if(typeof value === "object") return [JSON.stringify(value)];
+  return [String(value)];
+}
+function learnText(value){ return learnList(value).join(", "); }
+
+function toList(value){
+  if(Array.isArray(value)) return value.filter(v=>v!==null && v!==undefined && String(v).trim()!=="");
+  if(value===null || value===undefined || value==="") return [];
+  if(typeof value==='string'){
+    const t=value.trim();
+    if(!t) return [];
+    try{
+      const parsed=JSON.parse(t);
+      if(Array.isArray(parsed)) return parsed;
+    }catch(_e){}
+    return t.includes(',') ? t.split(',').map(v=>v.trim()).filter(Boolean) : [t];
+  }
+  return [value];
+}
+
+function extractParamsFromCode(code){
+  if(!code) return [];
+  const first=(code.split('\n').find(line=>/^\s*(def|class)\s+/.test(line))||'').trim();
+  const m=first.match(/\(([^)]*)\)/);
+  if(!m) return [];
+  return m[1].split(',').map(v=>v.trim()).filter(v=>v && v!=='self' && v!=='cls').map(v=>v.split('=')[0].trim()).filter(Boolean);
+}
+
+function methodInfo(method){
+  const k=String(method||'').toLowerCase().replace(/[ _-]/g,'');
+  const db={
+    relu:{title:'ReLU / 修正线性单元', formula:'$f(x)=\\max(0,x)$', explain:'保留正输入并将负输入置零，为神经网络引入非线性。', code:'ReLU() / act_fn=ReLU()'},
+    sigmoid:{title:'Sigmoid / S 型激活', formula:'$\\sigma(x)=\\frac{1}{1+e^{-x}}$', explain:'把实数映射到 0 到 1 之间，常用于概率或门控形式的输出。', code:'Sigmoid() / sigmoid activation'},
+    latent:{title:'Latent variable / 潜变量', formula:'$z \\sim q_\\phi(z\\mid x)$', explain:'用潜在表示 z 描述观测数据背后的低维因素；在 VAE 中通常由编码器学习其分布。', code:'latent / z / latent_dim'},
+    softmax:{title:'Softmax', formula:'$p_i=\\frac{e^{z_i}}{\\sum_j e^{z_j}}$', explain:'将一组 logits 转换为和为 1 的类别概率。', code:'Softmax()'},
+    mse:{title:'Mean Squared Error / 均方误差', formula:'$\\mathrm{MSE}=\\frac{1}{n}\\sum_i(y_i-\\hat y_i)^2$', explain:'衡量预测值与真实值之间的平方误差，常用于回归。', code:'MSE / squared error'},
+    crossentropy:{title:'Cross Entropy / 交叉熵', formula:'$L=-\\sum_i y_i\\log p_i$', explain:'衡量目标分布与预测概率分布之间的差异，常用于分类。', code:'cross_entropy / log loss'}
+  };
+  return db[k]||null;
+}
+
+function buildMathLearning(methods, x){
+  const known=methods.map(m=>({m,info:methodInfo(m)})).filter(v=>v.info);
+  if(!known.length) return `<div class="learn-note">No curated formula is available for the detected methods yet. The source code is kept below for inspection. / 当前检测到的方法暂未配置公式讲解，可结合下方源码继续分析。</div>`;
+  return known.map(({m,info})=>`<div class="learn-section"><h4>${escapeHtml(info.title)}</h4><div class="formula">${info.formula}</div><div>${escapeHtml(info.explain)}</div><div class="code-map"><code>${escapeHtml(info.code)}</code><span class="meta">Code cue / 源码对应线索</span></div></div>`).join('');
+}
+
+function buildOverview(x, methods){
+  const name=escapeHtml(x.entity||'(unnamed / 未命名)');
+  const type=escapeHtml(x.type||'code entity');
+  const methodText=methods.length ? methods.map(escapeHtml).join(', ') : 'no math keywords detected / 暂未检测到数学关键词';
+  return `<div class="learn-section"><h4>What is this? / 这是什么？</h4><div><b>${name}</b> is a ${type} from the selected NumPy-ML source location. / 这是当前检索结果对应的 NumPy-ML ${type}。</div><div class="learn-note">Detected learning cues / 检测到的学习线索：${methodText}</div></div>`;
+}
+
 function showDetail(x){
   selectedItem=x;
   const d=document.getElementById("detail"); const e=document.getElementById("detailEmpty");
   e.classList.add("hidden"); d.classList.remove("hidden");
-  const tags=(x.math_methods||[]).map(m=>`<span class="tag m">${m}</span>`).join("")||"<span class='meta'>（backend TODO: extract math method keywords from docstring / 待后端补全：从 docstring 抽取数学方法关键词）</span>";
-  const params=(x.params||[]).map(p=>`<span class="tag">${p}</span>`).join("")||"<span class='meta'>（backend TODO: extract params from __init__ / 待后端补全：从 __init__ 抽取参数）</span>";
-  const refs=(x.references||[]).join(", ")||"（backend TODO: extract references / papers from docstring / 待后端补全：从 docstring 抽取参考文献/论文链接）";
-  const edges=(x.ref_edges||[]).join(", ")||"（backend TODO: resolve import / inheritance / call edges / 待后端补全：从 import / 继承 / 调用解析引用关系）";
-  const math=escapeHtml(x.docstring_math||x.docstring||x.code||"（backend TODO: math description / 待后端补全数学描述）");
+  const methods=toList(x.math_methods);
+  const tags=methods.map(m=>`<span class="tag m">${escapeHtml(String(m))}</span>`).join("")||"<span class='meta'>No math-method keywords detected / 暂未检测到数学方法关键词</span>";
+  const paramsRaw=toList(x.params);
+  const params=paramsRaw.length ? paramsRaw : extractParamsFromCode(x.code||'');
+  const paramsHtml=params.map(p=>`<span class="tag">${escapeHtml(String(p))}</span>`).join("")||"<span class='meta'>Parameters not available / 暂无参数数据</span>";
+  const refs=toList(x.references).map(v=>escapeHtml(String(v))).join(", ")||"No references attached / 暂无参考文献";
+  const edges=toList(x.ref_edges).map(v=>escapeHtml(String(v))).join(", ")||"No resolved reference edges / 暂无已解析引用关系";
+  const doc=x.docstring_math||x.docstring||'';
   d.innerHTML=
     `<div class="code-actions"><button class="small-btn" onclick="copyCode()">Copy Code / 复制代码</button><button class="small-btn ghost" onclick="addCompareByItem(selectedItem)">+ Add to Compare / 加入对比</button></div>`+
-    `<div class="kv"><b>Name / 名称</b>${x.entity||"(unnamed / 未命名)"}</div>`+
-    `<div class="kv"><b>Module / 模块</b>${x.module||x.path||"—"}</div>`+
-    `<div class="kv"><b>Family / 算法族</b>${x.family||"—"}</div>`+
-    `<div class="kv"><b>Task / 任务</b>${x.task||"—"}</div>`+
-    `<div class="kv"><b>Path / 路径</b><span class="meta">${x.path||"—"}:${x.lines||""}</span></div>`+
-    `<div class="kv"><b>Math Methods / 数学方法</b><br>${tags}</div>`+
-    `<div class="kv"><b>Key Params / 关键参数</b><br>${params}</div>`+
-    `<div class="kv"><b>Math Description / 数学描述</b><pre id="mathBlock">${math}</pre></div>`+
-    `<div class="kv"><b>References / 参考文献</b>${refs}</div>`+
-    `<div class="kv"><b>Reference Edges / 引用关系</b>${edges}</div>`+
-    `<div class="kv"><b>Source / 源码</b><pre id="codeBlock">${escapeHtml(x.code||"（no source / 无源码）")}</pre></div>`;
+    `<div class="kv"><b>Name / 名称</b>${escapeHtml(x.entity||"(unnamed / 未命名)")}</div>`+
+    `<div class="kv"><b>Module / 模块</b>${escapeHtml(x.module||x.path||"—")}</div>`+
+    `<div class="kv"><b>Family / 算法族</b>${escapeHtml(x.family||"—")}</div>`+
+    `<div class="kv"><b>Task / 任务</b>${escapeHtml(x.task||"—")}</div>`+
+    `<div class="kv"><b>Path / 路径</b><span class="meta">${escapeHtml(x.path||"—")}:${escapeHtml(String(x.lines||""))}</span></div>`+
+    buildOverview(x,methods)+
+    `<div class="learn-section"><h4>Math Methods / 数学方法</h4>${tags}</div>`+
+    `<div class="learn-section"><h4>Math Explanation / 数学原理</h4>${buildMathLearning(methods,x)}</div>`+
+    `<div class="learn-section"><h4>Key Parameters / 关键参数</h4>${paramsHtml}<div class="learn-note">Parameters are taken from structured metadata when available; otherwise they are inferred only from the visible function signature. / 优先使用结构化参数；缺失时仅从当前可见函数签名提取。</div></div>`+
+    (doc?`<div class="learn-section"><h4>Docstring / 原始说明</h4><pre>${escapeHtml(doc)}</pre></div>`:'')+
+    `<div class="learn-section"><h4>References / 参考文献</h4>${refs}</div>`+
+    `<div class="learn-section"><h4>Reference Edges / 引用关系</h4>${edges}</div>`+
+    `<div class="learn-section"><h4>Source Code / 源码</h4><pre id="codeBlock">${escapeHtml(x.code||"（no source / 无源码）")}</pre></div>`;
   if(window.renderMathInElement){ renderMathInElement(d,{delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}]}); }
 }
 function copyCode(){ const c=document.getElementById('codeBlock'); if(c){ navigator.clipboard.writeText(c.innerText).then(()=>alert('Copied to clipboard / 已复制到剪贴板')); } }
@@ -339,58 +436,268 @@ function addCompareByItem(item){
   renderCompare();
   showLearnTab('compare');
 }
+function compareList(v){
+  if(v==null || v==='') return [];
+  if(Array.isArray(v)) return v.map(x=>typeof x==='object' ? JSON.stringify(x) : String(x));
+  if(typeof v==='string'){
+    const t=v.trim();
+    if(!t) return [];
+    try { const j=JSON.parse(t); if(Array.isArray(j)) return compareList(j); } catch(e){}
+    return t.split(/[,;|]/).map(x=>x.trim()).filter(Boolean);
+  }
+  if(typeof v==='object') return Object.entries(v).map(([k,val])=>`${k}: ${typeof val==='object'?JSON.stringify(val):val}`);
+  return [String(v)];
+}
+function compareText(v){
+  const a=compareList(v); return a.length ? a.join(', ') : '—';
+}
+function compareMethods(x){ return compareList(x.math_methods || x.mathMethods || x.methods); }
+function removeCompare(i){ compareItems.splice(i,1); renderCompare(); }
+function clearCompare(){ compareItems=[]; renderCompare(); }
 function renderCompare(){
   const leftSlot=document.getElementById('compareLeft');
   const rightSlot=document.getElementById('compareRight');
   const table=document.getElementById('compareTable');
-  if(!compareItems.length){ leftSlot.innerHTML='Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加'; rightSlot.innerHTML='Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加'; table.classList.add('hidden'); return; }
-  leftSlot.innerHTML=compareItems[0]?`<b>${compareItems[0].entity}</b><div class="meta">${compareItems[0].path}:${compareItems[0].lines}</div>`:'Add to left / 点击左侧添加';
-  rightSlot.innerHTML=compareItems[1]?`<b>${compareItems[1].entity}</b><div class="meta">${compareItems[1].path}:${compareItems[1].lines}</div>`:'Add to right / 点击右侧添加';
-  if(compareItems.length===2){
-    const a=compareItems[0], b=compareItems[1];
-    table.classList.remove('hidden');
-    table.innerHTML=
-      `<table style="width:100%;font-size:13px;border-collapse:collapse">`+
-      `<tr style="border-bottom:1px solid #e2e8f0"><th style="text-align:left;padding:6px">Dimension / 维度</th><th>${a.entity}</th><th>${b.entity}</th></tr>`+
-      `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px">Module / 模块</td><td>${a.module||a.path||'—'}</td><td>${b.module||b.path||'—'}</td></tr>`+
-      `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px">Family / 算法族</td><td>${a.family||'—'}</td><td>${b.family||'—'}</td></tr>`+
-      `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px">Task / 任务</td><td>${a.task||'—'}</td><td>${b.task||'—'}</td></tr>`+
-      `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px">Math Methods / 数学方法</td><td>${(a.math_methods||[]).join(', ')||'TODO'}</td><td>${(b.math_methods||[]).join(', ')||'TODO'}</td></tr>`+
-      `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px">Key Params / 关键参数</td><td>${(a.params||[]).join(', ')||'TODO'}</td><td>${(b.params||[]).join(', ')||'TODO'}</td></tr>`+
-      `<tr><td style="padding:6px">Math Description / 数学描述</td><td><pre style="white-space:pre-wrap">${escapeHtml(a.docstring_math||a.code||'—')}</pre></td><td><pre style="white-space:pre-wrap">${escapeHtml(b.docstring_math||b.code||'—')}</pre></td></tr>`+
-      `</table>`;
-  }
+  const empty='Click "+ Compare" on a result / 点击检索结果上的「+ 对比」添加';
+  const slot=(x,i)=> x ? `<b>${escapeHtml(x.entity||'Unknown')}</b><div class="meta">${escapeHtml((x.path||'')+(x.lines?':'+x.lines:''))}</div><button class="small-btn ghost" style="margin-top:8px" onclick="removeCompare(${i})">Remove / 移除</button>` : empty;
+  leftSlot.innerHTML=slot(compareItems[0],0);
+  rightSlot.innerHTML=slot(compareItems[1],1);
+  if(compareItems.length!==2){ table.classList.add('hidden'); table.innerHTML=''; return; }
+  const a=compareItems[0], b=compareItems[1];
+  const am=compareMethods(a), bm=compareMethods(b);
+  const al=am.map(x=>x.toLowerCase()), bl=bm.map(x=>x.toLowerCase());
+  const common=am.filter(x=>bl.includes(x.toLowerCase()));
+  const onlyA=am.filter(x=>!bl.includes(x.toLowerCase()));
+  const onlyB=bm.filter(x=>!al.includes(x.toLowerCase()));
+  const cell=v=>escapeHtml(v==null||v===''?'—':String(v));
+  const methods=x=>escapeHtml(compareText(compareMethods(x)));
+  const params=x=>escapeHtml(compareText(x.params || x.key_params || x.parameters));
+  const refs=x=>escapeHtml(compareText(x.references || x.refs));
+  const desc=x=>escapeHtml(x.docstring_math || x.math_description || x.docstring || '—');
+  table.classList.remove('hidden');
+  table.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0">
+      <b>Detailed Comparison / 详细对比</b><button class="small-btn ghost" onclick="clearCompare()">Clear Compare / 清空对比</button>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse;table-layout:fixed">
+      <tr style="border-bottom:1px solid #cbd5e1"><th style="text-align:left;padding:8px;width:18%">Dimension / 维度</th><th style="text-align:left;padding:8px">${cell(a.entity)}</th><th style="text-align:left;padding:8px">${cell(b.entity)}</th></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px"><b>Source / 源码位置</b></td><td style="padding:8px">${cell((a.path||a.module||'—')+(a.lines?':'+a.lines:''))}</td><td style="padding:8px">${cell((b.path||b.module||'—')+(b.lines?':'+b.lines:''))}</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px"><b>Family / 算法族</b></td><td style="padding:8px">${cell(a.family)}</td><td style="padding:8px">${cell(b.family)}</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px"><b>Task / 任务</b></td><td style="padding:8px">${cell(a.task)}</td><td style="padding:8px">${cell(b.task)}</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px"><b>Math Methods / 数学方法</b></td><td style="padding:8px">${methods(a)}</td><td style="padding:8px">${methods(b)}</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px"><b>Key Parameters / 关键参数</b></td><td style="padding:8px">${params(a)}</td><td style="padding:8px">${params(b)}</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px"><b>Math Explanation / 数学说明</b></td><td style="padding:8px;vertical-align:top;white-space:pre-wrap">${desc(a)}</td><td style="padding:8px;vertical-align:top;white-space:pre-wrap">${desc(b)}</td></tr>
+      <tr><td style="padding:8px"><b>References / 参考</b></td><td style="padding:8px;vertical-align:top">${refs(a)}</td><td style="padding:8px;vertical-align:top">${refs(b)}</td></tr>
+    </table></div>
+    <div class="panel" style="margin-top:12px;background:#f8fafc">
+      <h3>Concept Overlap / 概念交集与差异</h3>
+      <p><b>Shared / 共同：</b>${escapeHtml(common.length?common.join(', '):'No shared detected math methods / 暂未检测到共同数学方法')}</p>
+      <p><b>${cell(a.entity)} only / 仅左侧：</b>${escapeHtml(onlyA.length?onlyA.join(', '):'—')}</p>
+      <p><b>${cell(b.entity)} only / 仅右侧：</b>${escapeHtml(onlyB.length?onlyB.join(', '):'—')}</p>
+      <p class="hint">This comparison uses metadata already returned by search; missing fields are shown as “—”. / 对比使用检索接口已有元数据，缺失字段显示为“—”。</p>
+    </div>`;
 }
 
+// Path V2: curated concept dependencies. This is a learning guide, not a parsed call graph.
+const PATH_KNOWLEDGE={
+  algebra:{title:'线性代数 / Linear algebra',why:'理解向量、矩阵乘法以及线性层中的权重与输入。',example:'线性层：y = Wx + b。',check:'为什么权重矩阵的形状必须与输入维度匹配？'},
+  calculus:{title:'微积分与梯度 / Calculus & gradients',why:'理解导数、链式法则以及梯度如何用于参数更新。',example:'梯度下降：θ ← θ − η∇L(θ)。',check:'链式法则如何帮助计算多层网络的梯度？'},
+  probability:{title:'概率基础 / Probability',why:'理解随机变量、条件概率与概率分布。',example:'条件概率 P(y|x) 表示给定 x 时 y 的分布。',check:'概率密度与离散概率有什么区别？'},
+  optimization:{title:'损失函数与优化 / Loss & optimization',why:'理解训练目标、正则化与最小化损失。',example:'最小化 L(θ)；正则项可以约束参数。',check:'为什么训练损失下降不一定意味着泛化能力提升？'},
+  neural:{title:'神经网络与激活函数 / Neural networks',why:'理解全连接层、非线性激活及前向传播。',example:'h = ReLU(Wx+b)。',check:'如果网络中没有非线性激活，多层线性层会怎样？'},
+  sigmoid:{title:'Sigmoid / S 型激活',why:'将实数映射到 0 与 1 之间；具体含义取决于模型输出。',example:'σ(x)=1/(1+e^(−x))。',check:'Sigmoid 的输出范围是什么？'},
+  relu:{title:'ReLU / 修正线性单元',why:'理解神经网络中常见的分段线性激活。',example:'ReLU(x)=max(0,x)。',check:'当输入小于零时，ReLU 输出是多少？'},
+  latent:{title:'潜在变量 / Latent variables',why:'理解观测数据背后的隐变量以及编码器与解码器。',example:'生成模型通常通过潜在变量 z 描述数据生成过程。',check:'潜在变量与观测变量有什么不同？'},
+  vae:{title:'变分自编码器 / VAE',why:'连接编码器、潜在分布、解码器与变分目标。',example:'常见目标包含重建项与 KL 散度项。',check:'VAE 的编码器与解码器分别负责什么？'},
+  likelihood:{title:'似然与对数似然 / Likelihood',why:'理解给定参数时观测数据的概率模型及其对数形式。',example:'负对数似然：NLL(θ)=−Σ log p(yᵢ|xᵢ,θ)。',check:'为什么常将似然的乘积转化为对数之和？'},
+  logistic:{title:'逻辑回归 / Logistic regression',why:'理解线性得分如何经 Sigmoid 映射为二分类概率。',example:'p(y=1|x)=σ(wᵀx+b)。',check:'逻辑回归为什么通常用于分类？'},
+  regularization:{title:'正则化 / Regularization',why:'理解在目标函数中约束模型复杂度的方式。',example:'L(θ)+λ‖θ‖²。',check:'正则化系数增大可能带来什么影响？'},
+  evaluation:{title:'验证与评估 / Evaluation',why:'使用独立数据评估模型并识别过拟合。',example:'区分训练集、验证集和测试集。',check:'为什么不能用测试集反复调参？'},
+  implementation:{title:'源码实现 / Source implementation',why:'回到当前搜索结果，结合代码核对函数签名、调用和实际实现。',example:'阅读当前函数源码并对照前面的概念。',check:'当前函数负责训练、损失计算还是网络构建？'}
+};
+function pathPlan(item){
+  const name=String(item.entity||'').toLowerCase();
+  const module=String(item.module||item.path||'').toLowerCase();
+  const cues=toList(item.math_methods).map(v=>String(v).toLowerCase());
+  const text=[name,module,...cues].join(' ');
+  let ids=['algebra','calculus','probability','optimization'];
+  let basis='通用基础路径 / General foundation';
+  if(/vae|variational|latent/.test(text)){
+    ids=['algebra','calculus','probability','neural','relu','sigmoid','latent','vae'];
+    basis='VAE 相关学习路径 / VAE-related learning path';
+  }else if(/logistic|_nll|likelihood|log likelihood/.test(text)){
+    ids=['algebra','probability','sigmoid','likelihood','logistic','optimization','regularization'];
+    basis='逻辑回归与似然 / Logistic regression & likelihood';
+  }else if(/neural|mlp|relu|softmax|sigmoid/.test(text)){
+    ids=['algebra','calculus','optimization','neural'];
+    if(/relu/.test(text))ids.push('relu');
+    if(/sigmoid/.test(text))ids.push('sigmoid');
+    basis='神经网络相关路径 / Neural-network learning path';
+  }else if(/linear|regression|ridge|lasso/.test(text)){
+    ids=['algebra','calculus','optimization','regularization','evaluation'];
+    basis='回归相关学习路径 / Regression learning path';
+  }
+  return {ids:[...new Set([...ids,'implementation'])],basis};
+}
+let pathOpenNode=-1;
+function togglePathNode(i){pathOpenNode=pathOpenNode===i?-1:i;renderPath();}
+function pathToSource(){
+  showLearnTab('math');
+  document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'start'});
+}
 function renderPath(){
   const box=document.getElementById('pathTree');
-  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to generate its learning path (backend TODO) / 选择一个算法后生成学习路径（后端待实现）</div>'; return; }
-  const fam=selectedItem.family||'Unknown family / 未知算法族';
-  const mod=selectedItem.module||selectedItem.path?.split('/')[0]||'Unknown module / 未知模块';
-  box.innerHTML=
-    `<div><b>${selectedItem.entity}</b></div>`+
-    `<div class="tree">`+
-    `<div>Prerequisites: Linear Algebra / Probability / Optimization / 前置：线性代数 / 概率基础 / 优化方法</div>`+
-    `<div class="tree">→ ${fam} basics: loss function + parameter estimation / ${fam} 基础：损失函数 + 参数估计</div>`+
-    `<div class="tree">→ ${mod} module: survey of sibling algorithms / ${mod} 模块：同类算法族综述</div>`+
-    `<div class="tree">→ <b>${selectedItem.entity}</b>: concrete implementation & code / ${selectedItem.entity}：具体实现与代码</div>`+
-    `</div>`+
-    `<p class="hint">Note: a real path needs the backend to parse docstring + reference edges; this is a sketch. / 注：真实路径需后端解析 docstring 与引用边自动生成；当前为示意结构。</p>`;
+  if(!selectedItem){box.innerHTML='<div class="placeholder">先在 Algorithm Search 中点击一个搜索结果，再打开 Path / Select a search result first.</div>';return;}
+  const plan=pathPlan(selectedItem);
+  const safeName=escapeHtml(String(selectedItem.entity||'未命名函数'));
+  box.innerHTML=`<div class="learn-section"><h4>当前学习目标 / Selected source: ${safeName}</h4>
+    <div class="meta">${escapeHtml(String(selectedItem.path||selectedItem.module||'—'))}</div>
+    <div class="path-status">${plan.basis} · ${plan.ids.length} 个节点。此路径由预设知识依赖和检索关键词生成，并非对源码依赖的自动证明。 / Curated learning guide, not a verified source dependency graph.</div>
+    <div class="path-actions"><button class="small-btn ghost" onclick="pathToSource()">查看当前源码 / View source</button></div></div>`+
+    plan.ids.map((id,i)=>{
+      const k=PATH_KNOWLEDGE[id],open=pathOpenNode===i;
+      return `<div class="path-step"><div class="path-number">${i+1}</div><div>
+      <button type="button" class="path-node" aria-expanded="${open}" onclick="togglePathNode(${i})"><b>${escapeHtml(k.title)}</b> <span class="meta">${open?'▲ 收起':'▼ 展开解释'}</span></button>
+      ${open?`<div class="path-detail"><p><b>学习目标：</b>${escapeHtml(k.why)}</p><p><b>示例：</b>${escapeHtml(k.example)}</p><p><b>自测：</b>${escapeHtml(k.check)}</p>${id==='implementation'?'<button class="small-btn ghost" onclick="pathToSource()">打开 Math Card 源码 / Open source</button>':''}</div>`:''}</div></div>`;
+    }).join('');
 }
-function renderRec(){
+let recRequestToken=0;
+function recMethods(x){ return compareMethods(x).map(v=>String(v).toLowerCase()); }
+function recIdentity(x){ return `${x.entity||''}|${x.path||''}|${x.lines||''}`; }
+function recommendationReasons(base,candidate){
+  const reasons=[];
+  const basePath=String(base.path||base.module||'');
+  const candPath=String(candidate.path||candidate.module||'');
+  const baseDir=basePath.replace(/\\/g,'/').split('/').slice(0,-1).join('/');
+  const candDir=candPath.replace(/\\/g,'/').split('/').slice(0,-1).join('/');
+  if(baseDir && candDir && baseDir===candDir) reasons.push('same module / 同模块');
+  if(base.family && candidate.family && String(base.family).toLowerCase()===String(candidate.family).toLowerCase() && String(base.family).toLowerCase()!=='other') reasons.push('same family / 同算法族');
+  if(base.task && candidate.task && String(base.task).toLowerCase()===String(candidate.task).toLowerCase()) reasons.push('same task / 同任务');
+  const a=recMethods(base), b=recMethods(candidate);
+  const shared=a.filter(m=>b.includes(m));
+  if(shared.length) reasons.push(`shared math: ${shared.slice(0,3).join(', ')} / 共同数学方法`);
+  if(!reasons.length) reasons.push('semantic/source-code similarity / 语义或源码相似');
+  return reasons;
+}
+function recommendationScore(base,candidate){
+  let score=Number(candidate.fused||0);
+  const reasons=recommendationReasons(base,candidate);
+  reasons.forEach(r=>{
+    if(r.includes('same module')) score+=0.30;
+    if(r.includes('same family')) score+=0.20;
+    if(r.includes('same task')) score+=0.20;
+    if(r.includes('shared math')) score+=0.25;
+  });
+  return score;
+}
+function openRecommendation(i){
+  const x=window.__recommendItems?.[i];
+  if(!x) return;
+  showDetail(x);
+  showLearnTab('math');
+  document.getElementById('learnBox').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function addRecommendationCompare(i){
+  const x=window.__recommendItems?.[i];
+  if(x) addCompareByItem(x);
+}
+async function renderRec(){
   const box=document.getElementById('recList');
-  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to see recommendations (backend TODO) / 选择一个算法后显示相似推荐（后端待实现）</div>'; return; }
-  box.innerHTML=
-    `<div class="card"><b>Same-module rec / 同模块推荐</b><div class="meta">Other algorithms in the same ${selectedItem.module||'—'} module (backend TODO) / 与 ${selectedItem.entity} 同属 ${selectedItem.module||'—'} 的其他算法（后端待实现）</div></div>`+
-    `<div class="card"><b>Same-family rec / 同算法族推荐</b><div class="meta">Comparable algorithms in the same ${selectedItem.family||'—'} family (backend TODO) / 同属 ${selectedItem.family||'—'} 的可比算法（后端待实现）</div></div>`+
-    `<div class="card"><b>Co-reference rec / 引用共现推荐</b><div class="meta">Utility functions / base classes often referenced with ${selectedItem.entity} (backend TODO) / 常与 ${selectedItem.entity} 一起被引用的工具函数 / 基类（后端待实现）</div></div>`;
+  const base=selectedItem;
+  if(!base){ box.innerHTML='<div class="placeholder">先在 Algorithm Search 中选择一个算法，再查看推荐 / Select an algorithm first.</div>'; return; }
+  const token=++recRequestToken;
+  box.innerHTML='<div class="placeholder">正在分析相似算法… / Finding related algorithms…</div>';
+  const methods=compareMethods(base).slice(0,4);
+  const query=[base.entity, base.task, ...methods].filter(Boolean).join(' ');
+  try{
+    const r=await fetch(BASE+'/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:query||base.entity||'algorithm',top_k:10,module:'',family:'',task:''})});
+    const j=await r.json();
+    if(token!==recRequestToken) return;
+    if(!r.ok) throw new Error(j.detail||`HTTP ${r.status}`);
+    const baseId=recIdentity(base);
+    let items=(j.results||[]).filter(x=>recIdentity(x)!==baseId);
+    const seen=new Set();
+    items=items.filter(x=>{const k=recIdentity(x);if(seen.has(k))return false;seen.add(k);return true;});
+    items.sort((a,b)=>recommendationScore(base,b)-recommendationScore(base,a));
+    items=items.slice(0,6);
+    window.__recommendItems=items;
+    if(!items.length){box.innerHTML='<div class="placeholder">暂未找到足够相似的算法。可以换一个搜索结果后再试。 / No related algorithms found.</div>';return;}
+    const baseMethods=compareMethods(base);
+    box.innerHTML=`<div class="learn-section"><h4>Recommendation V2 / 相似算法推荐</h4>
+      <p><b>当前算法 / Selected:</b> ${escapeHtml(String(base.entity||'—'))}</p>
+      <div class="meta">推荐依据：搜索语义分数 + 模块/任务/数学方法重合。分数用于当前页面排序，不代表算法优劣。 / Ranking combines retrieval similarity with metadata overlap; it is not a quality score.</div>
+      ${baseMethods.length?`<div style="margin-top:8px">${baseMethods.map(m=>`<span class="tag">${escapeHtml(String(m))}</span>`).join(' ')}</div>`:''}</div>`+
+      items.map((x,i)=>{
+        const reasons=recommendationReasons(base,x);
+        const shared=recMethods(base).filter(m=>recMethods(x).includes(m));
+        const sim=Math.max(0,Math.min(100,Math.round((Number(x.semantic||x.fused||0))*100)));
+        return `<div class="card" style="cursor:default">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><span class="tag">${escapeHtml(String(x.type||'algorithm'))}</span> <b>${escapeHtml(String(x.entity||'Unnamed'))}</b><div class="meta">${escapeHtml(String(x.path||x.module||'—'))}${x.lines?':'+escapeHtml(String(x.lines)):''}</div></div><b>${sim}%</b></div>
+          <div style="margin-top:10px"><b>Why recommended / 推荐原因：</b> ${reasons.map(r=>escapeHtml(r)).join(' · ')}</div>
+          ${shared.length?`<div class="meta" style="margin-top:6px">Shared concepts / 共同概念：${shared.map(m=>escapeHtml(m)).join(', ')}</div>`:''}
+          <div style="margin-top:10px"><button class="small-btn" onclick="openRecommendation(${i})">Open Math Card / 查看数学卡片</button> <button class="small-btn ghost" onclick="addRecommendationCompare(${i})">+ Compare / 加入对比</button></div>
+        </div>`;
+      }).join('');
+  }catch(e){
+    if(token!==recRequestToken) return;
+    box.innerHTML=`<div class="placeholder">Recommendation failed / 推荐失败：${escapeHtml(String(e.message||e))}</div>`;
+  }
 }
-function renderGraph(){
+let graphRequestToken=0;
+function graphNodeHtml(n,root=false){
+  const role=n.role==='caller'?'Caller / 调用者':n.role==='callee'?'Callee / 被调用':'Selected / 当前节点';
+  return `<div class="graph-node ${root?'root':''}" onclick="openGraphNode('${encodeURIComponent(n.entity||'')}','${encodeURIComponent(n.path||'')}')">
+    <div><span class="tag">${escapeHtml(n.type||'entity')}</span><b>${escapeHtml(n.entity||'Unnamed')}</b></div>
+    <div class="meta">${escapeHtml(role)} · ${escapeHtml(n.path||'—')}:${escapeHtml(n.lines||'')}</div>
+  </div>`;
+}
+function openGraphNode(entityEncoded,pathEncoded){
+  const entity=decodeURIComponent(entityEncoded), path=decodeURIComponent(pathEncoded);
+  const hit=currentResults.find(x=>x.entity===entity && x.path===path);
+  if(hit){ showDetail(hit); showLearnTab('math'); return; }
+  document.getElementById('query').value=entity;
+  doSearch();
+  document.getElementById('searchResult').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function renderGraph(){
   const box=document.getElementById('callGraph');
-  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to render its call graph (backend TODO) / 选择一个算法后渲染调用关系图（后端待实现）</div>'; return; }
-  box.innerHTML=
-    `<pre style="text-align:left">${selectedItem.entity}\n├── inherits ← (backend TODO / 待后端解析)\n├── calls ← (backend TODO / 待后端解析)\n└── called-by ← (backend TODO / 待后端解析)</pre>`+
-    `<p class="hint">Note: a real call graph needs the backend to resolve import / class / function edges; placeholder shown. / 注：真实调用图需后端解析 import / class / function 引用边；当前为占位示意。</p>`;
+  if(!selectedItem){ box.innerHTML='<div class="placeholder">Select an algorithm to render its call graph / 请选择一个算法查看调用图</div>'; return; }
+  const token=++graphRequestToken;
+  box.innerHTML='<div class="placeholder">Building call graph from indexed AST edges… / 正在根据已索引的 AST 调用关系生成调用图…</div>';
+  try{
+    const q=new URLSearchParams({module:selectedItem.module||'',entity:selectedItem.entity||'',path:selectedItem.path||''});
+    const r=await fetch(BASE+'/api/learn/call_graph?'+q.toString());
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const g=await r.json();
+    if(token!==graphRequestToken) return;
+    const nodes=g.nodes||[], edges=g.edges||[];
+    if(!nodes.length){ box.innerHTML=`<div class="placeholder">${escapeHtml(g.message||'No graph data / 暂无调用图数据')}</div>`; return; }
+    const root=nodes.find(n=>n.id===g.root_id)||nodes.find(n=>n.role==='selected')||nodes[0];
+    const callers=nodes.filter(n=>n.role==='caller');
+    const callees=nodes.filter(n=>n.role==='callee');
+    const unresolved=g.unresolved_calls||[];
+    box.className='';
+    box.innerHTML=`
+      <div class="learn-section">
+        <h4>Call Graph V2 / 调用关系图</h4>
+        <div class="learn-note">AST-derived indexed call relations. Solid entries are resolved to repository entities; unresolved symbols are listed separately. / 基于 AST 索引生成；已解析项对应仓库实体，无法确认的调用单独列出。</div>
+        <div class="graph-summary">
+          <div class="graph-stat"><b>${callers.length}</b>Callers / 调用者</div>
+          <div class="graph-stat"><b>${callees.length}</b>Callees / 被调用</div>
+          <div class="graph-stat"><b>${edges.length}</b>Resolved edges / 已解析边</div>
+        </div>
+        <div class="graph-cols">
+          <div class="graph-col"><h4>Called by / 谁调用它</h4>${callers.length?callers.map(n=>graphNodeHtml(n)).join(''):'<div class="meta">No resolved callers / 暂无已解析调用者</div>'}</div>
+          <div class="graph-col"><h4>Selected entity / 当前节点</h4>${graphNodeHtml(root,true)}<div class="graph-arrow">callers → selected → callees</div></div>
+          <div class="graph-col"><h4>Calls / 它调用谁</h4>${callees.length?callees.map(n=>graphNodeHtml(n)).join(''):'<div class="meta">No resolved callees / 暂无已解析被调用节点</div>'}</div>
+        </div>
+        ${unresolved.length?`<div class="graph-unresolved"><b>Unresolved/external calls / 未解析或外部调用</b><div style="margin-top:6px">${unresolved.map(x=>`<span class="tag">${escapeHtml(String(x))}</span>`).join('')}</div><div class="learn-note">These symbols were detected in source but were not confidently matched to an indexed repository entity. / 这些符号在源码中被检测到，但无法可靠匹配到当前仓库索引实体。</div></div>`:''}
+        <div class="learn-note" style="margin-top:10px">${escapeHtml(g.note||'')}</div>
+      </div>`;
+  }catch(e){
+    if(token!==graphRequestToken) return;
+    box.innerHTML=`<div class="placeholder">Call graph failed / 调用图生成失败：${escapeHtml(String(e.message||e))}</div>`;
+  }
 }
 
 function escapeHtml(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
