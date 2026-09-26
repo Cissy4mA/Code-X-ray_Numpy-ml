@@ -47,9 +47,10 @@
  .tab:hover{background:#f8faff}
  .bar{height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin:3px 0}
  .bar>div{height:100%;background:#2563eb}
- .mode-btn{background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;padding:6px 12px;margin-right:4px}
- .mode-btn.active{background:#2563eb;color:#fff;border-color:#2563eb}
- .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:10px}
+.mode-btn{background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;padding:6px 12px;margin-right:4px}
+.mode-btn.active{background:#2563eb;color:#fff;border-color:#2563eb}
+.code-block-scroll{max-height:360px;overflow-y:auto;white-space:pre;font-family:monospace;font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:10px}
  .stat{border:1px solid #e1e4e8;border-radius:8px;padding:10px;text-align:center}
  .stat .num{font-size:20px;font-weight:700;color:#2563eb}
  .stat .lab{font-size:12px;color:#666}
@@ -64,7 +65,14 @@
  .score-row{display:flex;align-items:center;gap:8px;font-size:12px;margin:2px 0}
  .score-row .label{width:60px;color:#666}
  .score-row .bar{flex:1;height:8px}
+ .score-rows{display:flex;gap:8px;margin:8px 0}
+ .class-info .score-row{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;margin:0}
+ .class-info .score-row .label{width:auto;font-size:11px}
+ .class-info .score-row .bar{width:100%;flex:none}
+ .class-info .score-row .score-hd{display:flex;justify-content:space-between;align-items:center}
+ .class-info .score-row .value{font-size:12px;color:#334155}
  .tree{padding-left:16px;border-left:2px solid #e2e8f0;margin-left:6px}
+
  .path-step{display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:start;margin:12px 0}
  .path-number{background:#dbeafe;color:#1d4ed8;border-radius:50%;width:32px;height:32px;display:grid;place-items:center;font-weight:700}
  .path-node{border:1px solid #cbd5e1;border-radius:8px;padding:12px;background:#fff;width:100%;text-align:left;color:#1e293b;margin:0;font-size:14px}
@@ -85,7 +93,28 @@
  .graph-arrow{text-align:center;color:#64748b;font-size:12px;margin:2px 0}
  .graph-unresolved{margin-top:12px;padding:10px;border:1px dashed #cbd5e1;border-radius:8px;background:#fafafa}
  @media(max-width:800px){.graph-cols{grid-template-columns:1fr}.graph-summary{grid-template-columns:1fr}}
- </style>
+ 
+ .readme{max-height:260px;overflow-y:auto;border:1px solid #e1e4e8;border-radius:6px;padding:10px;background:#fff;font-size:13px}
+ .readme p{margin:6px 0}
+ .readme ul,.readme ol{margin:6px 0;padding-left:20px}
+ .readme li{margin:2px 0}
+ .readme h1,.readme h2,.readme h3{font-size:14px;margin:10px 0 6px}
+.class-card{display:flex;gap:0;align-items:stretch;padding:0;overflow:hidden;max-height:720px}
+.class-main{flex:2;min-width:0;padding:12px;display:flex;flex-direction:column;overflow:hidden}
+.class-info{flex:0 0 auto}
+.class-code{flex:1 1 0;min-height:180px;margin-top:10px;background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-radius:6px;padding:10px;font-family:monospace;font-size:12px;line-height:1.45;overflow-y:auto;white-space:pre}
+.class-code pre{margin:0;padding:0;background:transparent;color:#1e293b}
+.class-funcs{flex:1;min-width:180px;max-width:280px;padding:12px;display:flex;flex-direction:column;overflow:hidden;border-left:1px solid #e2e8f0;background:#f8fafc;border-radius:0 8px 8px 0}
+.func-list{flex:1 1 0;min-height:0;overflow-y:auto}
+.func-item{margin:6px 0;padding-bottom:5px;border-bottom:1px solid #e2e8f0}
+.func-item:last-child{border-bottom:none}
+.func-name{font-family:monospace;font-size:12px;font-weight:600;color:#1e293b;word-break:break-all}
+.func-meaning{color:#64748b;font-size:11px;margin-top:2px;line-height:1.35}
+.free-section{margin-top:14px}
+.free-section h4{margin:0 0 6px;font-size:13px;color:#475569}
+.free-item{display:inline-block;margin:2px 6px 2px 0;padding:4px 8px;background:#f1f5f9;border-radius:4px;font-size:12px}
+</style>
+
 </head>
 <body data-page-node-id="Qqmpz4cdb5M5acz6I1QiBC">
 <h1 data-page-node-id="a8xWFHwY8bkk5bCNk9rkCp">Code X-Ray</h1>
@@ -120,22 +149,23 @@
 
 <!-- 3.1 Module Search / 模块搜索 -->
 <h3>3.1 Module Search / 模块搜索</h3>
-<p class="meta">Search the 13 algorithm modules. Results show module summaries like a README, no code. / 搜索 13 个算法模块，结果以 README 风格展示模块摘要，不显示代码。</p>
+<p class="meta">Search the 13 algorithm modules. Each result shows the module's own README (e.g., <code>numpy_ml/neural_nets/README.md</code>) in a scrollable box. / 搜索 13 个算法模块，每个结果在滚动框中展示该模块目录下的 README 原文（如 <code>numpy_ml/neural_nets/README.md</code>），不显示代码。</p>
 <div class="row">
-  <div style="flex:1"><input type="text" id="moduleQuery" placeholder="e.g. neural network, reinforcement learning / 例如 神经网络、强化学习"></div>
+  <div style="flex:1"><label class="meta">Query / 查询</label><input type="text" id="moduleQuery" placeholder="e.g. neural network, reinforcement learning / 例如 神经网络、强化学习"></div>
+  <div style="max-width:100px"><label class="meta">Top-K (1-3)</label><input type="number" id="moduleTopK" value="1" min="1" max="3"></div>
   <div style="max-width:120px"><button onclick="doModuleSearch()">Search / 检索</button></div>
 </div>
 <div id="moduleResult" style="margin-top:10px"></div>
 
 <!-- 3.2 Algorithm Search / 算法搜索 -->
 <h3>3.2 Algorithm Search / 算法搜索</h3>
-<p class="meta">Search inside a module (or all modules) and limit results to top-k. / 在指定模块或全部模块中搜索算法，限制返回数量。</p>
+<p class="meta">Search returns top-k <b>algorithm classes / 算法分类</b> (a complete algorithm). Each class card lists all its member functions on the right. / 返回前 k 个完整算法分类，每张卡片右侧列出该分类下的全部成员函数。</p>
 <div class="row">
   <div style="max-width:180px"><label class="meta">Module / 模块</label><select id="fModule">
     <option value="">All / 全部</option>
   </select></div>
   <div style="flex:1"><label class="meta">Query / 查询</label><input type="text" id="query" placeholder="e.g. which algorithm estimates params via EM / 用 EM 估参数的算法"></div>
-  <div style="max-width:90px"><label class="meta">Top-K (1-10)</label><input type="number" id="topk" value="5" min="1" max="10"></div>
+  <div style="max-width:90px"><label class="meta">Top-K (1-10)</label><input type="number" id="topk" value="3" min="1" max="10"></div>
   <div style="max-width:120px"><button onclick="doSearch()" data-page-node-id="x5">Search / 检索</button></div>
 </div>
 <div id="searchResult" data-page-node-id="x6" style="margin-top:10px"></div>
@@ -144,7 +174,6 @@
 <h2 data-page-node-id="x7">4. Learn / 学习</h2>
 <div class="tabs" id="learnTabs">
   <span class="tab active" onclick="showLearnTab('math')">Math Card / 数学卡片</span>
-  <span class="tab" onclick="showLearnTab('compare')">Compare / 算法对比</span>
   <span class="tab" onclick="showLearnTab('path')">Path / 学习路径</span>
   <span class="tab" onclick="showLearnTab('rec')">Recommend / 相似推荐</span>
   <span class="tab" onclick="showLearnTab('graph')">Call Graph / 调用图</span>
@@ -252,28 +281,33 @@ async function clearDb(){
 
 
 async function doModuleSearch(){
-  const q=document.getElementById("moduleQuery").value.trim().toLowerCase();
+  const raw=document.getElementById("moduleQuery").value.trim();
+  const q=raw.toLowerCase();
   const box=document.getElementById("moduleResult");
   box.innerHTML="<i class='meta'>Loading modules… / 加载模块中…</i>";
   try{
-    const r=await fetch(BASE+"/api/modules");
+    let topK=Math.max(1, Math.min(3, +document.getElementById("moduleTopK").value||3));
+    const r=await fetch(BASE+"/api/modules/search",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({query: raw, top_k: topK})
+    });
     const j=await r.json();
-    let mods=j.modules||[];
-    if(q){
-      mods=mods.filter(m=>
-        m.name.toLowerCase().includes(q) ||
-        (m.family||"").toLowerCase().includes(q) ||
-        (m.description||"").toLowerCase().includes(q) ||
-        (m.samples||[]).some(s=>s.toLowerCase().includes(q))
-      );
-    }
+    const mods=j.results||[];
     if(!mods.length){ box.innerHTML="<i class='meta'>No matching modules / 无匹配模块</i>"; return; }
     box.innerHTML=mods.map(m=>{
       const readmeHtml = window.marked && m.readme ? marked.parse(m.readme) : `<div class="meta">${m.description}</div>`;
+      const aliasHtml = (m.aliases||[]).length
+        ? `<div class="meta" style="margin-top:6px">别名 / Aliases：${(m.aliases||[]).join("、")}</div>`
+        : "";
+      const reasonHtml = m.reason
+        ? `<div class="meta" style="margin-top:6px;color:#2563eb">匹配 / Why：${m.reason}</div>`
+        : "";
       return `
       <div class="card" onclick="selectModule('${m.name}')">
         <div><span class="tag">${m.family||"Module"}</span><b>${m.name}</b></div>
         <div class="meta">Files ${m.file_count} · Classes ${m.class_count} · Functions ${m.function_count}</div>
+        ${aliasHtml}
+        ${reasonHtml}
         <div class="readme" style="margin-top:8px">${readmeHtml}</div>
       </div>
     `}).join("");
@@ -302,21 +336,43 @@ async function doSearch(){
     const r=await fetch(BASE+"/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const j=await r.json();
     currentResults=j.results||[];
-    if(!currentResults.length){ box.innerHTML="<i class='meta'>No results / 无结果</i>"; return; }
+    const freeFns=j.free_functions||[];
+    if(!currentResults.length && !freeFns.length){ box.innerHTML="<i class='meta'>No results / 无结果</i>"; return; }
     box.innerHTML="";
     currentResults.forEach((x,i)=>{
       const el=document.createElement("div");
-      el.className="card"; el.dataset.idx=i;
+      el.className="card class-card"; el.dataset.idx=i;
       const maxScore=Math.max(currentResults[0].fused||0, 0.0001);
-      el.innerHTML=`<div><span class="tag">${x.type||""}</span><b>${x.entity||"(unnamed / 未命名)"}</b> <span class="meta">${x.path||""}:${x.lines||""}</span></div>`+
-        `<div class="score-row"><span class="label">fused</span><div class="bar"><div style="width:${Math.min(100,((x.fused||0)/maxScore)*100)}%"></div></div><span>${(x.fused??"?").toString().slice(0,5)}</span></div>`+
-        `<div class="score-row"><span class="label">keyword</span><div class="bar"><div style="width:${Math.min(100,((x.keyword||0)/maxScore)*100)}%;background:#16a34a"></div></div><span>${(x.keyword??"?").toString().slice(0,5)}</span></div>`+
-        `<div class="score-row"><span class="label">semantic</span><div class="bar"><div style="width:${Math.min(100,((x.semantic||0)/maxScore)*100)}%;background:#9333ea"></div></div><span>${(x.semantic??"?").toString().slice(0,5)}</span></div>`+
-        `<pre>${escapeHtml(x.code||"").slice(0,260)}${(x.code||"").length>260?'…':''}</pre>`+
-        `<button class="small-btn ghost" onclick="event.stopPropagation();addCompare(${i})">+ Compare / 对比</button>`;
+      const funcs=(x.functions||[]).length
+        ? (x.functions||[]).map(f=>`<div class="func-item"><div class="func-name">${escapeHtml(f.name)}</div><div class="func-meaning">${escapeHtml(f.meaning||"—")}</div></div>`).join("")
+        : '<div class="func-item"><div class="func-meaning">No member functions / 无成员函数</div></div>';
+      el.innerHTML=
+        `<div class="class-main">`+
+          `<div class="class-info">`+
+            `<div><span class="tag">${x.type||"class"}</span><b>${x.entity||"(unnamed / 未命名)"}</b> <span class="meta">${x.path||""}:${x.lines||""}</span></div>`+
+            `<div class="score-rows">`+
+              `<div class="score-row"><div class="score-hd"><span class="label">fused</span><span class="value">${(x.fused??"?").toString().slice(0,5)}</span></div><div class="bar"><div style="width:${Math.min(100,((x.fused||0)/maxScore)*100)}%"></div></div></div>`+
+              `<div class="score-row"><div class="score-hd"><span class="label">keyword</span><span class="value">${(x.keyword??"?").toString().slice(0,5)}</span></div><div class="bar"><div style="width:${Math.min(100,((x.keyword||0)/maxScore)*100)}%;background:#16a34a"></div></div></div>`+
+              `<div class="score-row"><div class="score-hd"><span class="label">semantic</span><span class="value">${(x.semantic??"?").toString().slice(0,5)}</span></div><div class="bar"><div style="width:${Math.min(100,((x.semantic||0)/maxScore)*100)}%;background:#9333ea"></div></div></div>`+
+            `</div>`+
+            `<div class="meta" style="margin-top:6px">Family / 算法族：${x.family||"—"} · Task / 任务：${x.task||"—"}</div>`+
+          `</div>`+
+          `<div class="class-code"><pre>${escapeHtml(x.code||"（no source / 无源码）")}</pre></div>`+
+        `</div>`+
+        `<div class="class-funcs" onclick="event.stopPropagation()">`+
+          `<div class="meta" style="margin-bottom:6px;font-weight:600">Functions / 函数 (${x.functions?x.functions.length:0})</div>`+
+          `<div class="func-list">${funcs}</div>`+
+        `</div>`;
       el.onclick=()=>{ document.querySelectorAll('.card').forEach(c=>c.classList.remove('active')); el.classList.add('active'); showDetail(x); };
       box.appendChild(el);
     });
+    if(freeFns.length){
+      const freeDiv=document.createElement("div");
+      freeDiv.className="free-section";
+      freeDiv.innerHTML='<h4>Module-level utility functions / 模块级工具函数</h4>'+
+        freeFns.map(f=>`<span class="free-item" title="${escapeHtml(f.meaning||'')}">${escapeHtml(f.entity)} <span class="meta">(${f.module||'—'})</span></span>`).join("");
+      box.appendChild(freeDiv);
+    }
   }catch(e){ box.innerHTML="<i class='meta'>Search failed / 检索失败："+e.message+"</i>"; }
 }
 
@@ -398,21 +454,21 @@ function showDetail(x){
   const refs=toList(x.references).map(v=>escapeHtml(String(v))).join(", ")||"No references attached / 暂无参考文献";
   const edges=toList(x.ref_edges).map(v=>escapeHtml(String(v))).join(", ")||"No resolved reference edges / 暂无已解析引用关系";
   const doc=x.docstring_math||x.docstring||'';
-  d.innerHTML=
-    `<div class="code-actions"><button class="small-btn" onclick="copyCode()">Copy Code / 复制代码</button><button class="small-btn ghost" onclick="addCompareByItem(selectedItem)">+ Add to Compare / 加入对比</button></div>`+
-    `<div class="kv"><b>Name / 名称</b>${escapeHtml(x.entity||"(unnamed / 未命名)")}</div>`+
-    `<div class="kv"><b>Module / 模块</b>${escapeHtml(x.module||x.path||"—")}</div>`+
-    `<div class="kv"><b>Family / 算法族</b>${escapeHtml(x.family||"—")}</div>`+
-    `<div class="kv"><b>Task / 任务</b>${escapeHtml(x.task||"—")}</div>`+
-    `<div class="kv"><b>Path / 路径</b><span class="meta">${escapeHtml(x.path||"—")}:${escapeHtml(String(x.lines||""))}</span></div>`+
-    buildOverview(x,methods)+
-    `<div class="learn-section"><h4>Math Methods / 数学方法</h4>${tags}</div>`+
-    `<div class="learn-section"><h4>Math Explanation / 数学原理</h4>${buildMathLearning(methods,x)}</div>`+
-    `<div class="learn-section"><h4>Key Parameters / 关键参数</h4>${paramsHtml}<div class="learn-note">Parameters are taken from structured metadata when available; otherwise they are inferred only from the visible function signature. / 优先使用结构化参数；缺失时仅从当前可见函数签名提取。</div></div>`+
-    (doc?`<div class="learn-section"><h4>Docstring / 原始说明</h4><pre>${escapeHtml(doc)}</pre></div>`:'')+
-    `<div class="learn-section"><h4>References / 参考文献</h4>${refs}</div>`+
-    `<div class="learn-section"><h4>Reference Edges / 引用关系</h4>${edges}</div>`+
-    `<div class="learn-section"><h4>Source Code / 源码</h4><pre id="codeBlock">${escapeHtml(x.code||"（no source / 无源码）")}</pre></div>`;
+    d.innerHTML =
+        `<div class="code-actions"><button class="small-btn" onclick="copyCode()">Copy Code / 复制代码</button><button class="small-btn ghost" onclick="addCompareByItem(selectedItem)">+ Add to Compare / 加入对比</button></div>` +
+        `<div class="kv"><b>Name / 名称</b>${escapeHtml(x.entity || "(unnamed / 未命名)")}</div>` +
+        `<div class="kv"><b>Module / 模块</b>${escapeHtml(x.module || x.path || "—")}</div>` +
+        `<div class="kv"><b>Family / 算法族</b>${escapeHtml(x.family || "—")}</div>` +
+        `<div class="kv"><b>Task / 任务</b>${escapeHtml(x.task || "—")}</div>` +
+        `<div class="kv"><b>Path / 路径</b><span class="meta">${escapeHtml(x.path || "—")}:${escapeHtml(String(x.lines || ""))}</span></div>` +
+        buildOverview(x, methods) +
+        `<div class="learn-section"><h4>Math Methods / 数学方法</h4>${tags}</div>` +
+        `<div class="learn-section"><h4>Math Explanation / 数学原理</h4>${buildMathLearning(methods, x)}</div>` +
+        `<div class="learn-section"><h4>Key Parameters / 关键参数</h4>${paramsHtml}<div class="learn-note">Parameters are taken from structured metadata when available; otherwise they are inferred only from the visible function signature.</div></div>` +
+        (doc ? `<div class="learn-section"><h4>Docstring / 原始说明</h4><pre>${escapeHtml(doc)}</pre></div>` : "") +
+        `<div class="learn-section"><h4>References / 参考文献</h4>${refs}</div>` +
+        `<div class="learn-section"><h4>Reference Edges / 引用关系</h4>${edges}</div>` +
+        `<div class="learn-section"><h4>Source Code / 源码</h4><pre id="codeBlock">${escapeHtml(x.code || "(no source / 无源码)")}</pre></div>`;
   if(window.renderMathInElement){ renderMathInElement(d,{delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}]}); }
 }
 function copyCode(){ const c=document.getElementById('codeBlock'); if(c){ navigator.clipboard.writeText(c.innerText).then(()=>alert('Copied to clipboard / 已复制到剪贴板')); } }

@@ -3,22 +3,16 @@
 把 NumPy-ML 这类算法仓库，像做 X 光一样“透视”给学习者看：精确/模糊双模式检索 +
 知识卡片 + 算法对比 + 学习路径 + 调用关系图，降低机器学习源码的学习门槛。
 
-> 产品命名、问题陈述、目标人群见 [`docs/项目简介与命名.md`](docs/项目简介与命名.md)；
-> 小组分工与三周计划见 [`docs/分工方案.md`](docs/分工方案.md)；
-> 协作与贡献流程（分支 / PR / 每人负责的文件）见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
-
----
-
-## 一、目录结构（已按人拆分，合并互不冲突）
+## 一、目录结构
 
 ```
 code-x-ray/
 ├── backend/                 # 后端（FastAPI）
-│   ├── app.py              # 装配入口 + 元接口（组长拥有，只接线）
+│   ├── app.py              # 装配入口 + 元接口（只接线）
 │   ├── db.py               # 数据库连接 + 建表（agent 维护，人不改）
 │   ├── parser.py           # 代码切分 + embedding（agent 维护，人不改）
 │   ├── index_pipeline.py   # 入库管线：粘贴代码 / 导入 GitHub 仓库（稳定）
-│   ├── retrieval.py        # 检索精度【分工1：你】核心改动区
+│   ├── retrieval.py        # 检索精度【分工1】核心改动区
 │   ├── learn.py            # 学习板块功能【分工2：两人】
 │   └── eval_test.py        # 检索评估与测试【分工3】
 ├── frontend/
@@ -26,20 +20,19 @@ code-x-ray/
 ├── scripts/
 │   ├── deploy.sh           # 一键部署（建 venv→装依赖→建库→恢复/重建数据→启动）
 │   ├── run.sh              # 日常启动
-│   ├── export_db.sh        # 导出数据库 dump
+│   ├── export_db.sh        # 导出数据库 dump│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储
 │   ├── migrations/         # 历史迁移/工具脚本（留档）
 │   └── test_demo.py
 ├── data/
-│   ├── learn_content.json  # 学习板块内容模板（分工2 维护）
-│   └── code_x_ray.sql      # （可选·非必须）数据库 dump，仅用于加速部署；队友无需准备，deploy.sh 会自动从 numpy-ml 导入
-├── docs/                   # 项目文档（简介/分工/设计）
-├── sample/
+│   ├── learn_content.json  # 学习板块内容模板
+│   └── code_x_ray.sql      # （可选·非必须）数据库 dump，仅用于加速部署│ └── code_x_ray.sql # （可选·非必须）数据库转储文件，仅用于加速部署
+├── sample/├── 示例/
 ├── requirements.txt
 ├── .env.example
 └── .gitignore
 ```
 
-**每人改自己的文件，合并时几乎零冲突：**
+**各分工改对应文件，合并时几乎零冲突：**
 | 分工 | 负责人 | 文件 |
 |------|--------|------|
 | 检索精度提升 | 1 人 | `backend/retrieval.py`（权重/重排）、`backend/parser.py` 的 `embed()` |
@@ -59,7 +52,7 @@ code-x-ray/
 
 ---
 
-## 三、一键部署（队友照做即可跑起来）
+## 三、一键部署
 
 ```bash
 git clone https://github.com/Cissy4mA/Code-X-ray_Numpy-ml.git
@@ -77,7 +70,7 @@ bash scripts/deploy.sh
 
 日常只启动（已部署过）：`bash scripts/run.sh`
 
-（可选）导出数据库 dump 加速队友部署——**非必须**，仅当你想省去队友首次导入时间时执行：
+（可选）导出数据库 dump 加速队友部署——**非必须**，仅当想省去队友首次导入时间时执行：
 ```bash
 bash scripts/export_db.sh   # 生成 data/code_x_ray.sql，本地用，不进版本库
 ```

@@ -1,8 +1,8 @@
 """学习板块（Learn Module）后端：数学原理卡片、算法对比、学习路径、调用关系图。
 
-归属：分工2（两人）拥有。这是你们的功能开发主战场。
+这是学习板块功能开发（分工 2）的主战场。
 
-数据存放在 data/learn_content.json（仓库已带一份空模板）。你们直接往这个 JSON 里填内容，
+数据存放在 data/learn_content.json（仓库已带一份空模板）。可直接往该 JSON 填内容，
 或改写下面的函数接数据库 / 调 retrieval 也行。前端通过 /api/learn/* 拿数据，不用动 retrieval.py。
 """
 import json

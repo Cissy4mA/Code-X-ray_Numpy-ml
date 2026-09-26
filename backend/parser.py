@@ -56,6 +56,65 @@ FAMILY_MAP = {
 # 不参与检索/统计的非算法目录（测试、绘图）
 NON_ALGO_MODULES = {"tests", "plots"}
 
+# 13 个算法模块的「全称 / 缩写 / 中英文别名」，入库时写入 modules.aliases，
+# 模块搜索时一并匹配，解决「只认缩写、不认全称 / 初学者看不懂缩写」的问题。
+MODULE_ALIASES = {
+    "bandits": [
+        "Bandits", "Multi-armed Bandits", "MAB", "Contextual Bandits",
+        "多臂老虎机", "多臂赌博机", "强盗算法", "老虎机问题",
+    ],
+    "factorization": [
+        "Matrix Factorization", "Factorization Machines", "MF", "FM",
+        "矩阵分解", "分解机", "矩阵分解机",
+    ],
+    "gmm": [
+        "Gaussian Mixture Model", "Gaussian Mixture Models", "GMM",
+        "Mixture of Gaussians", "Mixture of Gaussian", "高斯混合模型", "高斯混合",
+    ],
+    "hmm": [
+        "Hidden Markov Model", "Hidden Markov Models", "HMM",
+        "隐马尔可夫模型", "隐马尔可夫", "隐马模型",
+    ],
+    "lda": [
+        "Latent Dirichlet Allocation", "LDA", "Topic Model", "Topic Models",
+        "主题模型", "隐含狄利克雷分布", "潜在狄利克雷分配",
+    ],
+    "linear_models": [
+        "Linear Models", "Generalized Linear Models", "GLM",
+        "Linear Regression", "Logistic Regression", "Ridge Regression", "Lasso",
+        "线性回归", "逻辑回归", "岭回归", "套索回归", "线性模型", "广义线性模型",
+    ],
+    "neural_nets": [
+        "Neural Networks", "Neural Network", "Deep Learning", "Deep Neural Network",
+        "DNN", "NN", "Feedforward Network", "人工神经网络",
+        "神经网络", "深度学习", "深度神经网络", "前馈神经网络",
+    ],
+    "ngram": [
+        "N-Gram", "N-Grams", "N-Gram Language Model", "Ngram", "Ngrams",
+        "N元文法", "N元语法", "语言模型", "n元模型",
+    ],
+    "nonparametric": [
+        "Nonparametric Models", "Non-parametric Models", "Nonparametric", "Kernel Density Estimation",
+        "KDE", "核密度估计", "非参数模型", "非参数方法",
+    ],
+    "preprocessing": [
+        "Preprocessing", "Data Preprocessing", "Feature Scaling", "Normalization",
+        "Standardization", "Min-Max Scaling", "数据预处理", "特征缩放", "标准化", "归一化",
+    ],
+    "rl_models": [
+        "Reinforcement Learning", "RL", "Agents", "Markov Decision Process", "MDP",
+        "强化学习", "智能体", "强化学习智能体", "马尔可夫决策过程",
+    ],
+    "trees": [
+        "Decision Trees", "Random Forest", "Gradient Boosted Trees", "GBDT",
+        "XGBoost", "CART", "决策树", "随机森林", "梯度提升树", "梯度提升决策树",
+    ],
+    "utils": [
+        "Utilities", "Utils", "Helper Functions", "Utility Functions",
+        "工具函数", "辅助函数", "工具模块",
+    ],
+}
+
 # numpy-ml README.md 中“Available models”标题 -> 模块目录名
 README_MODULE_MAP = {
     "gaussian mixture model": "gmm",
@@ -364,6 +423,54 @@ def extract_module_readmes(readme_path):
     return sections
 
 
+def rewrite_image_paths(readme: str, module: str, repo_url: str, branch: str = "master") -> str:
+    """把模块 README 里的相对图片路径改写成 GitHub raw 绝对路径，避免前端展示破图。"""
+    base = repo_url.rstrip("/")
+    if base.endswith(".git"):
+        base = base[:-4]
+    # github.com -> raw.githubusercontent.com
+    base = re.sub(r"https?://github\.com/([^/]+)/([^/]+)", r"https://raw.githubusercontent.com/\1/\2", base)
+    prefix = f"{base}/{branch}/numpy_ml/{module}/"
+
+    def _is_absolute(path: str) -> bool:
+        return path.startswith(("http://", "https://", "data:"))
+
+    # Markdown: ![alt](path)
+    def md_repl(m):
+        alt = m.group(1)
+        path = m.group(2).strip()
+        if _is_absolute(path):
+            return m.group(0)
+        if path.startswith("/"):
+            path = path.lstrip("/")
+            if path.startswith("numpy_ml/"):
+                return f"![{alt}]({base}/{branch}/{path})"
+            path = f"numpy_ml/{module}/{path}"
+            return f"![{alt}]({base}/{branch}/{path})"
+        return f"![{alt}]({prefix}{path})"
+
+    readme = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", md_repl, readme)
+
+    # HTML <img src="..."> / <img src='...'>
+    def src_repl(m):
+        quote = m.group(1)
+        path = m.group(2).strip()
+        if _is_absolute(path):
+            return m.group(0)
+        if path.startswith("/"):
+            path = path.lstrip("/")
+            if path.startswith("numpy_ml/"):
+                new_src = f"{base}/{branch}/{path}"
+            else:
+                new_src = f"{base}/{branch}/numpy_ml/{module}/{path}"
+        else:
+            new_src = f"{prefix}{path}"
+        return f"src={quote}{new_src}{quote}"
+
+    readme = re.sub(r"src=(['\"])([^'\"]+)\1", src_repl, readme)
+    return readme
+
+
 # -----------------------------------------------------------------------------
 # 3. Embedding：API 优先，本地 sentence-transformers 兜底（默认）
 # -----------------------------------------------------------------------------
@@ -387,6 +494,23 @@ def embed(text):
     model = _get_model()
     vec = model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
     return vec.tolist()
+
+
+def module_embed_text(name, family, aliases, readme):
+    """构造「模块级」语义向量用的富集文本：名称 + 算法族 + 别名 + README。
+
+    别名是模块的「概念锚点」（如 preprocessing 的 Normalization / Feature Scaling /
+    Standardization），只拿 README 编码会让「normalize and scale features」这类自然语言
+    查询语义上找不到 preprocessing。把别名编进来后，语义检索才能命中模块的概念层。
+    """
+    alias_str = " ".join(aliases) if isinstance(aliases, list) else (aliases or "")
+    parts = [name, family or "", alias_str, (readme or "")[:3500]]
+    return " ".join(p for p in parts if p).strip()
+
+
+def embed_module(name, family, aliases, readme):
+    """模块级语义向量：name + 算法族 + 别名 + README 富集后编码。"""
+    return embed(module_embed_text(name, family, aliases, readme))
 
 
 def tokenize(text):

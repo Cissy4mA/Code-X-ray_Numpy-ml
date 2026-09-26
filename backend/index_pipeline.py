@@ -1,7 +1,7 @@
 """入库管线：粘贴代码入库 + 导入 GitHub 仓库。
 
-归属：agent / 你（分工1）维护，稳定不常改。
-学习板块（分工2）若需新增数据，应改为追加自己的数据表/JSON，不要动这里，
+稳定层：负责把代码仓库解析、切分、嵌入后写入 MySQL。
+学习板块（分工 2）若需新增数据，应追加对应的数据表/JSON，不建议修改本文件，
 以免与检索精度（retrieval.py）的改动在合并时冲突。
 """
 import json
@@ -19,7 +19,7 @@ def reset_all():
     conn = db.get_conn()
     cur = conn.cursor()
     cur.execute("SET FOREIGN_KEY_CHECKS=0")
-    for t in ("functions", "algorithms", "code_chunks", "code_files", "modules", "projects"):
+    for t in ("functions", "algorithms", "code_files", "modules", "projects"):
         cur.execute(f"TRUNCATE TABLE {t}")
     cur.execute("SET FOREIGN_KEY_CHECKS=1")
     conn.close()
@@ -33,10 +33,6 @@ def index_code(code, filename, module_path="", project_id=None, module_id=None):
     conn = db.get_conn()
     cur = conn.cursor()
     # Demo 阶段：同名文件重新入库时先清旧数据，避免重复
-    cur.execute(
-        "DELETE c FROM code_chunks c JOIN code_files f ON c.file_id=f.id WHERE f.path=%s",
-        (filename,),
-    )
     cur.execute("DELETE FROM code_files WHERE path=%s", (filename,))
 
     if project_id is None:
@@ -122,13 +118,6 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
     project_id = cur.lastrowid
     conn.close()
 
-    # 读取仓库 README，按模块切分（模块搜索时原样展示 README 内容）
-    readme_sections = {}
-    for readme_candidate in (os.path.join(tmp, "README.md"), os.path.join(tmp, "numpy_ml", "README.md")):
-        readme_sections = parser.extract_module_readmes(readme_candidate)
-        if readme_sections:
-            break
-
     # 先按模块目录分组，确保每个模块在 modules 表中有一行
     module_files = defaultdict(list)
     for root, _, fns in os.walk(tmp):
@@ -147,6 +136,25 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
                 continue
             module_files[module].append((p, rel))
 
+    # 读取仓库 README，按模块切分（无模块专属 README 时作为 fallback）
+    readme_sections = {}
+    for readme_candidate in (os.path.join(tmp, "README.md"), os.path.join(tmp, "numpy_ml", "README.md")):
+        readme_sections = parser.extract_module_readmes(readme_candidate)
+        if readme_sections:
+            break
+
+    # 模块专属 README 优先（如 numpy_ml/neural_nets/README.md），没有再 fallback 到概览
+    module_readme = {}
+    for module in sorted(module_files.keys()):
+        if not module or module in parser.NON_ALGO_MODULES:
+            continue
+        specific = os.path.join(tmp, "numpy_ml", module, "README.md")
+        if os.path.isfile(specific):
+            raw_readme = open(specific, encoding="utf-8", errors="replace").read()
+        else:
+            raw_readme = readme_sections.get(module, "")
+        module_readme[module] = parser.rewrite_image_paths(raw_readme, module, repo_url, branch)
+
     # 创建 modules 表记录（空模块名是顶层 loose 文件，不建模块行）
     module_id_map = {"": None}
     conn = db.get_conn()
@@ -155,11 +163,16 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
         if not module or module in parser.NON_ALGO_MODULES:
             continue
         family = parser.FAMILY_MAP.get(module, "Other")
-        readme = readme_sections.get(module, "")
+        readme = module_readme.get(module, "")
+        aliases = parser.MODULE_ALIASES.get(module, [])
+        # 方案 3：为模块生成「富集语义向量」——name + 算法族 + 别名 + README 一起编码，
+        # 让模块级语义检索能命中别名/概念层（如 "normalize and scale features" -> preprocessing）
+        readme_vec = parser.embed_module(module, family, aliases, readme) if readme else [0.0] * parser.DIM
         cur.execute(
-            "INSERT INTO modules(project_id,name,family,task,readme) VALUES(%s,%s,%s,%s,%s) "
-            "ON DUPLICATE KEY UPDATE family=VALUES(family), task=VALUES(task), readme=VALUES(readme)",
-            (project_id, module, family, "other", readme),
+            "INSERT INTO modules(project_id,name,family,task,readme,aliases,readme_embedding) VALUES(%s,%s,%s,%s,%s,%s,%s) "
+            "ON DUPLICATE KEY UPDATE family=VALUES(family), task=VALUES(task), readme=VALUES(readme), "
+            "aliases=VALUES(aliases), readme_embedding=VALUES(readme_embedding)",
+            (project_id, module, family, "other", readme, json.dumps(aliases, ensure_ascii=False), json.dumps(readme_vec)),
         )
         cur.execute("SELECT id FROM modules WHERE project_id=%s AND name=%s", (project_id, module))
         module_id_map[module] = cur.fetchone()[0]

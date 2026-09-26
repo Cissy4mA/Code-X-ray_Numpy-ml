@@ -1,6 +1,6 @@
 # sample_code.py
 # 一个迷你「订单系统」示例，用来演示Code X-Ray。
-# 注意函数里的注释刻意写了自然语言关键词，方便你观察「关键词检索」如何命中。
+# 注意函数里的注释刻意写了自然语言关键词，方便观察「关键词检索」如何命中。
 
 def authenticate_user(username, password):
     # verify user credentials before granting access
