@@ -35,7 +35,7 @@ git push origin feat/<对应分工>
 |------|--------|--------------|
 | 检索精度提升 | `feat/retrieval` | `backend/retrieval.py`、`backend/parser.py` 的 `embed()` |
 | 学习板块开发 | `feat/learn` | `backend/learn.py`、`data/learn_content.json` |
-| 检索评估与测试 | `feat/eval-test` | `backend/eval_test.py` |
+| 检索评估与测试 | `feat/eval-test` | `tests/eval_test.py` |
 | 页面设计美化 | `feat/frontend-style` | `frontend/index.html`（视觉/布局区块） |
 | 检索结果可视化 | `feat/frontend-search` | `frontend/index.html`（Search 页区块） |
 | 学习板块可视化 | `feat/frontend-learn` | `frontend/index.html`（Learn 页区块） |

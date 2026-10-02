@@ -3,7 +3,7 @@
 职责：仅做路由装配与启动入口，不写业务逻辑。
 - 检索精度：backend/retrieval.py（分工 1）
 - 学习板块：backend/learn.py（分工 2）
-- 评估测试：backend/eval_test.py（分工 3）
+- 评估测试：tests/eval_test.py（分工 3）
 - 入库管线：backend/index_pipeline.py
 - 数据库 / 解析：backend/db.py、backend/parser.py
 
@@ -18,12 +18,18 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
+# 评测模块 eval_test.py 位于 tests/，加入路径供 app 加载（提供 /api/eval 等端点）
+TESTS_DIR = os.path.join(REPO_ROOT, "tests")
+if TESTS_DIR not in sys.path:
+    sys.path.insert(0, TESTS_DIR)
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from backend import db, parser
-from backend import retrieval, learn, eval_test, index_pipeline
+from backend import retrieval, learn, index_pipeline
+import eval_test  # 评测模块位于 tests/，已加入 sys.path
 
 app = FastAPI(title="Code X-Ray")
 db.init_db()  # 启动时确保库表存在（含 v2 新增列）
@@ -39,7 +45,7 @@ class IndexReq(BaseModel):
 
 class SearchReq(BaseModel):
     query: str
-    top_k: int = 3
+    top_k: int = Field(default=3, ge=1, le=10, description="Algorithm class search result limit (1-10)")
     module: str = ""
     family: str = ""
     task: str = ""
@@ -195,8 +201,8 @@ def learn_path(module: str = ""):
 
 
 @app.get("/api/learn/call_graph")
-def learn_call_graph(module: str = ""):
-    return learn.call_graph(module)
+def learn_call_graph(module: str = "", entity: str = "", path: str = ""):
+    return learn.call_graph(module=module, entity=entity, path=path)
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +218,12 @@ def eval_modules_endpoint():
     return eval_test.evaluate_modules()
 
 
+@app.get("/api/eval/class_search")
+def eval_class_search_endpoint(kw_weight: float = 0.2, top_k: int = 5):
+    """3.2 分类检索评测；kw_weight 为 keyword 通道权重，semantic = 1 - kw_weight。"""
+    return eval_test.evaluate_class_search(kw_weight=kw_weight, top_k=top_k)
+
+
 @app.get("/api/smoke")
 def smoke_endpoint():
     return eval_test.smoke_test()
@@ -222,7 +234,10 @@ def smoke_endpoint():
 # ---------------------------------------------------------------------------
 @app.get("/")
 def index_page():
-    return FileResponse(FRONTEND_PATH)
+    return FileResponse(
+        FRONTEND_PATH,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 if __name__ == "__main__":
