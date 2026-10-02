@@ -10,23 +10,25 @@ code-x-ray/
 ├── backend/                 # 后端（FastAPI）
 │   ├── app.py              # 装配入口 + 元接口（只接线）
 │   ├── db.py               # 数据库连接 + 建表（agent 维护，人不改）
-│   ├── parser.py           # 代码切分 + embedding（agent 维护，人不改）
+│   ├── parser.py           # 代码切分 + embedding（含模块别名，导入时写入库）
 │   ├── index_pipeline.py   # 入库管线：粘贴代码 / 导入 GitHub 仓库（稳定）
 │   ├── retrieval.py        # 检索精度【分工1】核心改动区
-│   ├── learn.py            # 学习板块功能【分工2：两人】
-│   └── eval_test.py        # 检索评估与测试【分工3】
+│   └── learn.py            # 学习板块功能【分工2：两人】
 ├── frontend/
 │   └── index.html          # 前端单页（由 FastAPI 同源托管，无需 CORS）
+├── tests/                  # 全部测试代码（eval_test 亦被 app 加载提供 /api/eval 端点）
+│   ├── eval_test.py        # 检索评估与测试【分工3】
+│   └── test_third_part.py  # 第三部分 3.1→3.2 真实流程极端用例实跑
 ├── scripts/
-│   ├── deploy.sh           # 一键部署（建 venv→装依赖→建库→恢复/重建数据→启动）
+│   ├── deploy.sh           # 一键部署（建 venv→装依赖→建库→导入数据→启动）
 │   ├── run.sh              # 日常启动
-│   ├── export_db.sh        # 导出数据库 dump│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储│ ├── export_db.sh # 导出数据库转储
+│   ├── export_db.sh        # 导出数据库 dump（本地用，不进版本库）
 │   ├── migrations/         # 历史迁移/工具脚本（留档）
 │   └── test_demo.py
 ├── data/
-│   ├── learn_content.json  # 学习板块内容模板
-│   └── code_x_ray.sql      # （可选·非必须）数据库 dump，仅用于加速部署│ └── code_x_ray.sql # （可选·非必须）数据库转储文件，仅用于加速部署
-├── sample/├── 示例/
+│   └── learn_content.json  # 学习板块内容模板
+├── sample/
+│   └── sample_code.py     # 示例代码（前端 /api/sample 返回）
 ├── requirements.txt
 ├── .env.example
 └── .gitignore
@@ -37,7 +39,7 @@ code-x-ray/
 |------|--------|------|
 | 检索精度提升 | 1 人 | `backend/retrieval.py`（权重/重排）、`backend/parser.py` 的 `embed()` |
 | 学习板块开发 | 2 人 | `backend/learn.py` + `data/learn_content.json` |
-| 检索评估与测试 | 1 人 | `backend/eval_test.py` |
+| 检索评估与测试 | 1 人 | `tests/eval_test.py` |
 | 页面设计美化 | 1 人 | `frontend/index.html`（视觉/布局） |
 | 检索结果可视化 | 1 人 | `frontend/index.html`（Search 页） |
 | 学习板块可视化 | 1 人 | `frontend/index.html`（Learn 页） |
@@ -96,7 +98,7 @@ bash scripts/export_db.sh   # 生成 data/code_x_ray.sql，本地用，不进版
 
 ## 五、本地开发约定
 
-1. **不要改别人的文件**：检索改 `retrieval.py`、学习板块改 `learn.py`、评估改 `eval_test.py`，
+1. **不要改别人的文件**：检索改 `retrieval.py`、学习板块改 `learn.py`、评估改 `tests/eval_test.py`，
    其余（`app.py`/`db.py`/`parser.py`/`index_pipeline.py`）由组长/agent 维护。
 2. 前端三人各认领一块，改 `frontend/index.html` 前先和后端对好接口字段。
 3. 每个人随时用中文记流水账，最后发给论文主笔汇总。

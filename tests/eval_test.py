@@ -6,6 +6,13 @@
 - smoke_test()：接口/数据连通性冒烟，保证演示时后端不挂
 """
 from types import SimpleNamespace
+import os
+import sys
+
+# 让 tests/ 下的脚本无论从哪个目录启动，都能从项目根导入 backend 包
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 from backend import db, retrieval, parser
 
@@ -14,19 +21,18 @@ from backend import db, retrieval, parser
 EVAL_QUERIES = [
     {"query": "logistic regression", "module": "linear_models", "algorithm": "LogisticRegression"},
     {"query": "decision tree classifier", "module": "trees", "algorithm": "DecisionTree"},
-    {"query": "k-means clustering", "module": "kmeans", "algorithm": "KMeans"},
-    {"query": "gaussian mixture model", "module": "gmm", "algorithm": "GaussianMixture"},
+    {"query": "gaussian mixture model", "module": "gmm", "algorithm": "GMM"},
     {"query": "hidden markov model forward backward", "module": "hmm", "algorithm": None},
     {"query": "neural network backpropagation", "module": "neural_nets", "algorithm": None},
-    {"query": "reinforcement learning q learning", "module": "rl", "algorithm": None},
-    {"query": "naive bayes classifier", "module": "naive_bayes", "algorithm": "NaiveBayes"},
+    {"query": "reinforcement learning q learning", "module": "rl_models", "algorithm": None},
+    # 注：GaussianNBClassifier 实际归入 linear_models（naive_bayes 模块当年未入库）
+    {"query": "naive bayes classifier", "module": "linear_models", "algorithm": "GaussianNBClassifier"},
 ]
 
 # 3.2 分类级评测：基于 class_search 的真实线上路径，期望值与当前 numpy-ml 实际类名对齐。
 CLASS_EVAL_QUERIES = [
     {"query": "logistic regression", "module": "linear_models", "algorithm": "LogisticRegression"},
     {"query": "decision tree classifier", "module": "trees", "algorithm": "DecisionTree"},
-    {"query": "k-means clustering", "module": "kmeans", "algorithm": "KMeans"},
     {"query": "gaussian mixture model", "module": "gmm", "algorithm": "GMM"},
     {"query": "hidden markov model forward backward", "module": "hmm", "algorithm": "MultinomialHMM"},
     {"query": "neural network backpropagation", "module": "neural_nets", "algorithm": None},

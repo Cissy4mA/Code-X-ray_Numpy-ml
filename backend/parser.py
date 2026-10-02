@@ -82,6 +82,7 @@ MODULE_ALIASES = {
     "linear_models": [
         "Linear Models", "Generalized Linear Models", "GLM",
         "Linear Regression", "Logistic Regression", "Ridge Regression", "Lasso",
+        "Naive Bayes", "Gaussian Naive Bayes", "GaussianNB", "朴素贝叶斯",
         "线性回归", "逻辑回归", "岭回归", "套索回归", "线性模型", "广义线性模型",
     ],
     "neural_nets": [

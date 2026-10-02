@@ -158,7 +158,7 @@
 <div id="moduleResult" style="margin-top:10px"></div>
 
 <!-- 3.2 Algorithm Search / 算法搜索 -->
-<h3>3.2 Algorithm Search / 算法搜索</h3>
+<h3 id="sec32">3.2 Algorithm Search / 算法搜索</h3>
 <p class="meta">Search returns top-k <b>algorithm classes / 算法分类</b> (a complete algorithm). Each class card lists all its member functions on the right. / 返回前 k 个完整算法分类，每张卡片右侧列出该分类下的全部成员函数。</p>
 <div class="row">
   <div style="max-width:180px"><label class="meta">Module / 模块</label><select id="fModule">
@@ -171,13 +171,13 @@
 <div id="searchResult" data-page-node-id="x6" style="margin-top:10px"></div>
 
 <!-- 4. Learn / 学习 -->
-<h2 data-page-node-id="x7">4. Learn / 学习</h2>
+<h2 id="learnTitle" data-page-node-id="x7">4. Learn / 学习</h2>
 <div class="tabs" id="learnTabs">
     <span class="tab active" onclick="showLearnTab('math')">Math Card / 数学卡片</span>
-    <span class="tab" onclick="showLearnTab('compare')">Compare / 算法对比</span>
     <span class="tab" onclick="showLearnTab('path')">Path / 学习路径</span>
     <span class="tab" onclick="showLearnTab('rec')">Recommend / 相似推荐</span>
     <span class="tab" onclick="showLearnTab('graph')">Call Graph / 调用图</span>
+    <span class="tab" onclick="showLearnTab('compare')">Compare / 算法对比</span>
 </div>
 <div id="learnBox" class="panel">
   <div id="learnMath">
@@ -319,7 +319,7 @@ async function doModuleSearch(){
 function selectModule(name){
   document.getElementById("fModule").value=name;
   document.getElementById("query").focus();
-  document.getElementById("searchResult").scrollIntoView({behavior:"smooth", block:"start"});
+  document.getElementById("sec32").scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 async function doSearch(){
@@ -367,7 +367,7 @@ async function doSearch(){
           `<div class="meta" style="margin-bottom:6px;font-weight:600">Functions / 函数 (${x.functions?x.functions.length:0})</div>`+
           `<div class="func-list">${funcs}</div>`+
         `</div>`;
-      el.onclick=()=>{ document.querySelectorAll('.card').forEach(c=>c.classList.remove('active')); el.classList.add('active'); showDetail(x); };
+      el.onclick=()=>{ document.querySelectorAll('.card').forEach(c=>c.classList.remove('active')); el.classList.add('active'); showDetail(x); scrollToLearnBox(); };
       box.appendChild(el);
     });
     if(freeFns.length){
@@ -476,11 +476,12 @@ function showDetail(x){
   if(window.renderMathInElement){ renderMathInElement(d,{delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}]}); }
 }
 function copyCode(){ const c=document.getElementById('codeBlock'); if(c){ navigator.clipboard.writeText(c.innerText).then(()=>alert('Copied to clipboard / 已复制到剪贴板')); } }
+function scrollToLearnBox(){ const title=document.getElementById('learnTitle'); if(title) title.scrollIntoView({behavior:'smooth',block:'start'}); }
 
 function showLearnTab(name){
-  ['math','compare','path','rec','graph'].forEach(id=>document.getElementById('learn'+cap(id)).classList.add('hidden'));
+  ['math','path','rec','graph','compare'].forEach(id=>document.getElementById('learn'+cap(id)).classList.add('hidden'));
   document.getElementById('learn'+cap(name)).classList.remove('hidden');
-  document.querySelectorAll('#learnTabs .tab').forEach((t,i)=>t.classList.toggle('active',['math','compare','path','rec','graph'][i]===name));
+  document.querySelectorAll('#learnTabs .tab').forEach((t,i)=>t.classList.toggle('active',['math','path','rec','graph','compare'][i]===name));
   if(name==='path') renderPath();
   if(name==='rec') renderRec();
   if(name==='graph') renderGraph();
@@ -655,7 +656,7 @@ function openRecommendation(i){
   if(!x) return;
   showDetail(x);
   showLearnTab('math');
-  document.getElementById('learnBox').scrollIntoView({behavior:'smooth',block:'start'});
+  scrollToLearnBox();
 }
 function addRecommendationCompare(i){
   const x=window.__recommendItems?.[i];
@@ -717,7 +718,7 @@ function openGraphNode(entityEncoded,pathEncoded){
   if(hit){ showDetail(hit); showLearnTab('math'); return; }
   document.getElementById('query').value=entity;
   doSearch();
-  document.getElementById('searchResult').scrollIntoView({behavior:'smooth',block:'start'});
+  document.getElementById('sec32').scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function renderGraph(){
   const box=document.getElementById('callGraph');

@@ -6,6 +6,6 @@
 - index_pipeline.py  入库管线（粘贴代码 / 导入 GitHub 仓库）
 - retrieval.py       检索精度（分工 1）
 - learn.py           学习板块功能（分工 2）
-- eval_test.py       检索评估与测试（分工 3）
+- tests/eval_test.py  检索评估与测试（分工 3，亦被 app 加载提供 /api/eval 端点）
 - app.py             FastAPI 装配入口 + 元接口
 """

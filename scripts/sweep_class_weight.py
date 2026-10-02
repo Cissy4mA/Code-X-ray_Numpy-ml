@@ -10,7 +10,11 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from backend import eval_test
+# 评测模块已移至 tests/，加入路径后导入
+TESTS_DIR = os.path.join(REPO_ROOT, "tests")
+if TESTS_DIR not in sys.path:
+    sys.path.insert(0, TESTS_DIR)
+import eval_test
 
 
 def main():
