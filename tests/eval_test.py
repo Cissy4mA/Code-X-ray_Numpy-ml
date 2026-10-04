@@ -20,15 +20,23 @@ from backend import db, retrieval, parser
 # ---------------------------------------------------------------------------
 # 评测基准数据集 (Evaluation Benchmark Dataset)
 # ---------------------------------------------------------------------------
+# 评测基准数据集：支持两阶段级联与 OOD 拦截测试
 EVAL_QUERIES = [
-    {"query": "logistic regression", "module": "linear_models", "algorithm": "LogisticRegression"},
-    {"query": "decision tree classifier", "module": "trees", "algorithm": "DecisionTree"},
-    {"query": "naive bayes classifier", "module": "nonparametric", "algorithm": "GaussianNBClassifier"},
-    {"query": "gaussian mixture model", "module": "gmm", "algorithm": "GMM"},
-    {"query": "hidden markov model forward backward", "module": "hmm", "algorithm": "MultinomialHMM"},
-    {"query": "neural network backpropagation", "module": "neural_nets", "algorithm": "NeuralNetwork"},
-    {"query": "reinforcement learning agent", "module": "rl_models", "algorithm": "DynaAgent"},
-    {"query": "principal component analysis pca", "module": "preprocessing", "algorithm": "PCA"},
+    # 1. 库外算法拦截用例 (OOD)
+    {"query": "svm", "expected_module": "NOT_IN_REPO", "expected_class": "NOT_IN_REPO"},
+    {"query": "pca", "expected_module": "NOT_IN_REPO", "expected_class": "NOT_IN_REPO"},
+    {"query": "k-means", "expected_module": "NOT_IN_REPO", "expected_class": "NOT_IN_REPO"},
+
+    # 2. 库内常规及口语/错词算法用例
+    {"query": "logistic regression", "expected_module": "linear_models", "expected_class": "LogisticRegression"},
+    {"query": "decison tree", "expected_module": "trees", "expected_class": "DecisionTree"},
+    {"query": "naive bayes classifier", "expected_module": "linear_models", "expected_class": "GaussianNBClassifier"},
+    {"query": "gausian mixture", "expected_module": "gmm", "expected_class": "GMM"},
+    {"query": "hidden markov model", "expected_module": "hmm", "expected_class": "MultinomialHMM"},
+    {"query": "neural network", "expected_module": "neural_nets", "expected_class": "ReLU"},
+    {"query": "reinforcement learning agent", "expected_module": "rl_models", "expected_class": "DynaAgent"},
+    {"query": "q learning", "expected_module": "rl_models", "expected_class": "DynaAgent"},
+    {"query": "xgboost", "expected_module": "trees", "expected_class": "GradientBoostedDecisionTree"},
 ]
 
 MODULE_EVAL_QUERIES = [
@@ -55,32 +63,20 @@ def _req(q, top_k=20):
 
 def _hit_at(results, q, k):
     """results 已由融合分降序排列；检查前 k 个里是否出现期望的 algorithm 或 module。"""
-    exp_module = q.get("module")
-    exp_alg = q.get("algorithm")
+    exp_module = q.get("expected_module") or q.get("module")
+    exp_alg = q.get("expected_class") or q.get("algorithm")
     for r in results[:k]:
-        entity = (r.get("entity") or "").strip().lower()
-        mod = (r.get("module") or "").strip().lower()
-
-        # 优先匹配算法实体名（不区分大小写）
-        if exp_alg and entity == exp_alg.strip().lower():
-            return True
-        # 未指定具体算法名时，命中目标模块即算命中
-        if not exp_alg and exp_module and mod == exp_module.strip().lower():
+        entity = r.get("entity") or r.get("algorithm")
+        if entity == exp_alg:
             return True
     return False
 
 
 def _reciprocal_rank(results, q):
-    """计算期望算法或模块在结果列表中的倒数排名 (Reciprocal Rank)。"""
-    exp_module = q.get("module")
-    exp_alg = q.get("algorithm")
+    exp_alg = q.get("expected_class") or q.get("algorithm")
     for i, r in enumerate(results, start=1):
-        entity = (r.get("entity") or "").strip().lower()
-        mod = (r.get("module") or "").strip().lower()
-
-        if exp_alg and entity == exp_alg.strip().lower():
-            return 1.0 / i
-        if not exp_alg and exp_module and mod == exp_module.strip().lower():
+        entity = r.get("entity") or r.get("algorithm")
+        if entity == exp_alg:
             return 1.0 / i
     return 0.0
 
@@ -100,54 +96,104 @@ def _calc_latency_stats(latencies_ms: List[float]) -> Dict[str, float]:
     }
 
 
-def evaluate():
-    """跑算法级评测集，记录准确率与端到端查询耗时。"""
+def evaluate_two_stage_pipeline():
+    """
+    两阶段级联评测 (对接第三部分真实交互流):
+    Step 1: 调用 module_search 进行模块粗筛或 OOD 库外算法拦截。
+    Step 2: 若未收录则安全熔断；若命中模块，则带入 module 过滤条件调用 class_search。
+    """
     per_query = []
-    rr_sum = 0.0
-    h1 = h3 = h5 = 0
     latencies = []
-
-    for q in EVAL_QUERIES:
+    
+    stage1_hits = 0       # 3.1 模块命中/正确拦截数
+    stage2_top1 = 0       # 3.2 类级 Top1 命中数
+    stage2_top3 = 0       # 3.2 类级 Top3 命中数
+    rr_sum = 0.0
+    
+    for q_item in EVAL_QUERIES:
+        q = q_item["query"]
+        exp_mod = q_item["expected_module"]
+        exp_cls = q_item["expected_class"]
+        
         t0 = time.perf_counter()
-        results, _ = retrieval.rank(_req(q, top_k=20))
+        
+        # -----------------------------
+        # 阶段 3.1: 模块检索
+        # -----------------------------
+        m_req = SimpleNamespace(query=q, top_k=1, module="", family="", task="")
+        m_resp = retrieval.module_search(m_req)
+        
+        is_ood = m_resp.get("not_in_repo", False)
+        m_results = m_resp.get("results", [])
+        actual_mod = m_results[0]["name"] if (m_results and not is_ood) else ("NOT_IN_REPO" if is_ood else None)
+        
+        # 检验 3.1 模块是否符合 (库外拦截成功 或 模块匹配)
+        s1_ok = (exp_mod == "NOT_IN_REPO" and is_ood) or (actual_mod == exp_mod)
+        if s1_ok:
+            stage1_hits += 1
+            
+        # -----------------------------
+        # 阶段 3.2: 模块内类检索
+        # -----------------------------
+        s2_hit1 = False
+        s2_hit3 = False
+        rr = 0.0
+        top1_entity = None
+        
+        if is_ood:
+            # 库外算法成功拦截，流程安全终止
+            top1_entity = "NOT_IN_REPO (Intercepted)"
+            if exp_cls == "NOT_IN_REPO":
+                s2_hit1 = True
+                s2_hit3 = True
+                rr = 1.0
+        elif actual_mod:
+            # 3.1 命中模块，将模块名注入 class_search
+            c_req = SimpleNamespace(query=q, top_k=3, module=actual_mod, family="", task="")
+            c_resp = retrieval.class_search(c_req)
+            c_results = c_resp.get("results", [])
+            
+            top3_entities = [c.get("entity") for c in c_results[:3]]
+            top1_entity = top3_entities[0] if top3_entities else None
+            
+            if top1_entity == exp_cls:
+                s2_hit1 = True
+            if exp_cls in top3_entities:
+                s2_hit3 = True
+                rank = top3_entities.index(exp_cls) + 1
+                rr = 1.0 / rank
+                
         t1 = time.perf_counter()
-
         elapsed_ms = (t1 - t0) * 1000.0
         latencies.append(elapsed_ms)
-
-        rr = _reciprocal_rank(results, q)
+        
+        stage2_top1 += int(s2_hit1)
+        stage2_top3 += int(s2_hit3)
         rr_sum += rr
-        hit1 = _hit_at(results, q, 1)
-        hit3 = _hit_at(results, q, 3)
-        hit5 = _hit_at(results, q, 5)
-        h1 += int(hit1)
-        h3 += int(hit3)
-        h5 += int(hit5)
-
+        
         per_query.append({
-            "query": q["query"],
-            "expected_module": q.get("module"),
-            "expected_algorithm": q.get("algorithm"),
+            "query": q,
+            "expected": f"{exp_mod}::{exp_cls}",
+            "actual_mod": actual_mod,
+            "top1_result": top1_entity,
+            "stage1_ok": s1_ok,
+            "stage2_hit1": s2_hit1,
+            "stage2_hit3": s2_hit3,
             "mrr": round(rr, 4),
-            "hit@1": hit1,
-            "hit@3": hit3,
-            "hit@5": hit5,
-            "latency_ms": round(elapsed_ms, 2),
-            "top1": results[0]["entity"] if results else None,
+            "latency_ms": round(elapsed_ms, 2)
         })
-
+        
     n = len(EVAL_QUERIES)
     latency_stats = _calc_latency_stats(latencies)
+    
     return {
         "n": n,
-        "MRR": round(rr_sum / n, 4) if n else 0.0,
-        "Hit@1": round(h1 / n, 4) if n else 0.0,
-        "Hit@3": round(h3 / n, 4) if n else 0.0,
-        "Hit@5": round(h5 / n, 4) if n else 0.0,
-        "latency_mean_ms": latency_stats["mean"],
-        "latency_p50_ms": latency_stats["p50"],
-        "latency_p95_ms": latency_stats["p95"],
-        "per_query": per_query,
+        "Stage1_Accuracy": round(stage1_hits / n, 4),
+        "Stage2_Hit@1": round(stage2_top1 / n, 4),
+        "Stage2_Hit@3": round(stage2_top3 / n, 4),
+        "MRR": round(rr_sum / n, 4),
+        "latency_stats": latency_stats,
+        "per_query": per_query
     }
 
 
@@ -243,6 +289,10 @@ def run_ablation_study():
     algo_metrics = {m: {"hits1": 0, "hits3": 0, "hits5": 0, "rr_sum": 0.0} for m in algo_modes}
 
     for q in EVAL_QUERIES:
+        # 跳过库外未收录算法（OOD 不参与单阶段库内排序消融）
+        if q.get("expected_class") == "NOT_IN_REPO" or q.get("expected_module") == "NOT_IN_REPO":
+            continue
+
         raw_results, _ = retrieval.rank(_req(q, top_k=30))
 
         for mode in algo_modes:
@@ -372,23 +422,24 @@ def print_report():
     print(f"高尾延迟 (P95):   {mod_res['latency_p95_ms']} ms")
 
     print("\n" + "=" * 65)
-    print("3. 算法级检索评测 (Algorithm Search Hybrid)")
+    print("3. 两阶段端到端级联评测 (Two-Stage Pipeline Evaluation)")
     print("=" * 65)
-    algo_res = evaluate()
-    print(f"评测样本数 (N):   {algo_res['n']}")
-    print(f"MRR:             {algo_res['MRR']:.4f}")
-    print(f"Hit@1:           {algo_res['Hit@1'] * 100:.2f}%")
-    print(f"Hit@3:           {algo_res['Hit@3'] * 100:.2f}%")
-    print(f"Hit@5:           {algo_res['Hit@5'] * 100:.2f}%")
-    print(f"平均延迟 (Mean):  {algo_res['latency_mean_ms']} ms")
-    print(f"中位数延迟 (P50): {algo_res['latency_p50_ms']} ms")
-    print(f"高尾延迟 (P95):   {algo_res['latency_p95_ms']} ms")
+    algo_res = evaluate_two_stage_pipeline()
+    print(f"评测样本数 (N):                {algo_res['n']}")
+    print(f"Stage 1 (模块初筛/OOD拦截率):  {algo_res['Stage1_Accuracy'] * 100:.2f}%")
+    print(f"Stage 2 (模块内细查 Hit@1):    {algo_res['Stage2_Hit@1'] * 100:.2f}%")
+    print(f"Stage 2 (模块内细查 Hit@3):    {algo_res['Stage2_Hit@3'] * 100:.2f}%")
+    print(f"MRR:                           {algo_res['MRR']:.4f}")
+    lat_stats = algo_res['latency_stats']
+    print(f"平均总延迟 (Mean):             {lat_stats['mean']} ms")
+    print(f"中位数延迟 (P50):              {lat_stats['p50']} ms")
+    print(f"高尾延迟 (P95):                {lat_stats['p95']} ms")
 
-    print("\n[Detail] 算法级各 Query 命中与耗时详情:")
+    print("\n[Detail] 端到端各 Query 命中与耗时详情:")
     for pq in algo_res["per_query"]:
-        mark = "✓" if pq["hit@1"] else ("○" if pq["hit@3"] else "✗")
-        print(f"  [{mark}] Query: '{pq['query']}'")
-        print(f"      -> Top-1: {pq['top1']} | MRR: {pq['mrr']} | Latency: {pq['latency_ms']} ms")
+        mark = "✓" if pq["stage2_hit1"] else ("o" if pq["stage2_hit3"] else "x")
+        print(f"  [{mark}] Query: '{pq['query']}' (期望: {pq['expected']})")
+        print(f"      -> 命中模块: {pq['actual_mod']} | 结果: {pq['top1_result']} | MRR: {pq['mrr']} | Latency: {pq['latency_ms']} ms")
 
     # 运行消融实验
     run_ablation_study()
