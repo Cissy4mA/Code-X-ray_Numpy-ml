@@ -317,9 +317,13 @@ async function doModuleSearch(){
 }
 
 function selectModule(name){
-  document.getElementById("fModule").value=name;
-  document.getElementById("query").focus();
+  // 点 3.1 模块卡片 → 自动把 3.1 查询与模块约束带入 3.2，用户无需重输
+  const srcQuery=document.getElementById("moduleQuery").value.trim();
+  document.getElementById("fModule").value=name;   // 3.2 模块过滤：自动锁定为点中的模块
+  document.getElementById("query").value=srcQuery; // 3.2 查询：自动填充为 3.1 原查询
   document.getElementById("sec32").scrollIntoView({behavior:"smooth", block:"start"});
+  if(srcQuery){ doSearch(); }                     // 有查询则直接触发 3.2，不用再点检索
+  else { document.getElementById("query").focus(); }
 }
 
 async function doSearch(){
