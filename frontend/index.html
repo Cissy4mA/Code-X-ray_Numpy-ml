@@ -113,6 +113,15 @@
 .free-section{margin-top:14px}
 .free-section h4{margin:0 0 6px;font-size:13px;color:#475569}
 .free-item{display:inline-block;margin:2px 6px 2px 0;padding:4px 8px;background:#f1f5f9;border-radius:4px;font-size:12px}
+
+.complexity-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+.complexity-card{border:1px solid #dbe4ee;border-radius:10px;padding:12px;background:#fbfdff;min-height:110px}
+.complexity-card ul{margin:8px 0 0;padding-left:18px}.complexity-card li{margin:5px 0;line-height:1.45}
+.quiz-card{display:grid;grid-template-columns:44px 1fr;gap:10px;border:1px solid #dbe4ee;border-radius:10px;padding:12px;margin:10px 0;background:#fff}
+.quiz-index{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eef6ff;font-weight:700}
+.quiz-answer{margin-top:10px;padding:10px;border-left:3px solid #94a3b8;background:#f8fafc;border-radius:6px;line-height:1.5}
+@media(max-width:800px){.complexity-grid{grid-template-columns:1fr}}
+
 </style>
 
 </head>
@@ -178,6 +187,8 @@
     <span class="tab" onclick="showLearnTab('rec')">Recommend / 相似推荐</span>
     <span class="tab" onclick="showLearnTab('graph')">Call Graph / 调用图</span>
     <span class="tab" onclick="showLearnTab('compare')">Compare / 算法对比</span>
+    <span class="tab" onclick="showLearnTab('complexity')">Complexity / 复杂度分析</span>
+    <span class="tab" onclick="showLearnTab('quiz')">Quiz / 理解测试</span>
 </div>
 <div id="learnBox" class="panel">
   <div id="learnMath">
@@ -210,6 +221,14 @@
   <div id="learnGraph" class="hidden">
     <p class="meta">Visualize inheritance, call and reference relations between classes. / 可视化展示类与类之间的继承、调用与引用关系。</p>
     <div id="callGraph" class="placeholder">Select an algorithm to render its call graph / 选择一个算法后渲染调用关系图</div>
+  </div>
+  <div id="learnComplexity" class="hidden">
+    <p class="meta">Inspect code-shape signals that affect runtime and memory. Estimates are educational heuristics, not formal Big-O proofs. / 根据源码结构分析可能影响运行时间与内存的因素；结果为学习型启发式分析，并非严格复杂度证明。</p>
+    <div id="complexityBox" class="placeholder">Select an algorithm to analyze complexity / 选择一个算法后分析复杂度</div>
+  </div>
+  <div id="learnQuiz" class="hidden">
+    <p class="meta">Check your understanding of the selected algorithm with source-aware questions. / 根据当前算法的元数据与源码生成理解测试。</p>
+    <div id="quizBox" class="placeholder">Select an algorithm to start a quiz / 选择一个算法后开始测试</div>
   </div>
 </div>
 
@@ -317,13 +336,9 @@ async function doModuleSearch(){
 }
 
 function selectModule(name){
-  // 点 3.1 模块卡片 → 自动把 3.1 查询与模块约束带入 3.2，用户无需重输
-  const srcQuery=document.getElementById("moduleQuery").value.trim();
-  document.getElementById("fModule").value=name;   // 3.2 模块过滤：自动锁定为点中的模块
-  document.getElementById("query").value=srcQuery; // 3.2 查询：自动填充为 3.1 原查询
+  document.getElementById("fModule").value=name;
+  document.getElementById("query").focus();
   document.getElementById("sec32").scrollIntoView({behavior:"smooth", block:"start"});
-  if(srcQuery){ doSearch(); }                     // 有查询则直接触发 3.2，不用再点检索
-  else { document.getElementById("query").focus(); }
 }
 
 async function doSearch(){
@@ -483,12 +498,16 @@ function copyCode(){ const c=document.getElementById('codeBlock'); if(c){ naviga
 function scrollToLearnBox(){ const title=document.getElementById('learnTitle'); if(title) title.scrollIntoView({behavior:'smooth',block:'start'}); }
 
 function showLearnTab(name){
-  ['math','path','rec','graph','compare'].forEach(id=>document.getElementById('learn'+cap(id)).classList.add('hidden'));
-  document.getElementById('learn'+cap(name)).classList.remove('hidden');
-  document.querySelectorAll('#learnTabs .tab').forEach((t,i)=>t.classList.toggle('active',['math','path','rec','graph','compare'][i]===name));
+  const learnTabs=['math','path','rec','graph','compare','complexity','quiz'];
+  learnTabs.forEach(id=>{ const el=document.getElementById('learn'+cap(id)); if(el) el.classList.add('hidden'); });
+  const target=document.getElementById('learn'+cap(name));
+  if(target) target.classList.remove('hidden');
+  document.querySelectorAll('#learnTabs .tab').forEach((t,i)=>t.classList.toggle('active',learnTabs[i]===name));
   if(name==='path') renderPath();
   if(name==='rec') renderRec();
   if(name==='graph') renderGraph();
+  if(name==='complexity') renderComplexity();
+  if(name==='quiz') renderQuiz();
 }
 function cap(s){ return s[0].toUpperCase()+s.slice(1); }
 
@@ -763,6 +782,74 @@ async function renderGraph(){
     if(token!==graphRequestToken) return;
     box.innerHTML=`<div class="placeholder">Call graph failed / 调用图生成失败：${escapeHtml(String(e.message||e))}</div>`;
   }
+}
+
+
+// Learn V3: Complexity / 复杂度分析
+function complexitySignals(x){
+  const code=String(x?.code||'');
+  const loops=(code.match(/\b(for|while)\b/g)||[]).length;
+  const comprehensions=(code.match(/\bfor\s+\w+\s+in\b/g)||[]).length;
+  const matrixOps=(code.match(/(@|\.dot\s*\(|matmul\s*\(|einsum\s*\()/g)||[]).length;
+  const allocations=(code.match(/(zeros|ones|empty|copy|concatenate|stack|reshape)\s*\(/g)||[]).length;
+  const recursion=x?.entity && new RegExp('\\b'+String(x.entity).split('.').pop().replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*\\(').test(code);
+  return {loops,comprehensions,matrixOps,allocations,recursion,lines:code?code.split(/\r?\n/).length:0};
+}
+function renderComplexity(){
+  const box=document.getElementById('complexityBox');
+  const x=selectedItem;
+  if(!x){ box.innerHTML='<div class="placeholder">Select an algorithm first / 请先选择一个算法</div>'; return; }
+  const s=complexitySignals(x), methods=compareMethods(x);
+  const timeNotes=[];
+  if(s.loops) timeNotes.push(`${s.loops} loop keyword(s) detected / 检测到 ${s.loops} 个循环结构`);
+  if(s.matrixOps) timeNotes.push(`${s.matrixOps} matrix/vector operation(s) detected / 检测到 ${s.matrixOps} 个矩阵或向量运算`);
+  if(s.recursion) timeNotes.push('possible self-call detected / 检测到可能的递归调用');
+  if(!timeNotes.length) timeNotes.push('no obvious loop/matrix hotspot in the visible snippet / 当前可见源码中未发现明显循环或矩阵热点');
+  const memoryNotes=[];
+  if(s.allocations) memoryNotes.push(`${s.allocations} array allocation/copy signal(s) / ${s.allocations} 个数组分配或复制信号`);
+  else memoryNotes.push('no obvious large allocation signal in the visible snippet / 当前可见源码中未发现明显的大型分配信号');
+  const caution=s.lines?`Visible source size: ${s.lines} lines / 当前可见源码：${s.lines} 行`:'Source snippet unavailable / 暂无源码片段';
+  box.className='';
+  box.innerHTML=`<div class="learn-section"><h4>Complexity Inspector / 复杂度分析</h4>
+    <div class="kv"><b>Selected / 当前对象</b>${escapeHtml(String(x.entity||'—'))}</div>
+    <div class="complexity-grid">
+      <div class="complexity-card"><b>Runtime signals / 时间开销信号</b><ul>${timeNotes.map(v=>`<li>${escapeHtml(v)}</li>`).join('')}</ul></div>
+      <div class="complexity-card"><b>Memory signals / 空间开销信号</b><ul>${memoryNotes.map(v=>`<li>${escapeHtml(v)}</li>`).join('')}</ul></div>
+      <div class="complexity-card"><b>Math context / 数学背景</b><div style="margin-top:8px">${methods.length?methods.map(m=>`<span class="tag">${escapeHtml(String(m))}</span>`).join(' '):'<span class="meta">No math metadata / 暂无数学元数据</span>'}</div></div>
+    </div>
+    <div class="learn-note"><b>Evidence / 分析依据：</b> ${escapeHtml(caution)}. This panel intentionally reports code-shape evidence instead of inventing an exact Big-O class when input dimensions and implementation contracts are unknown. / 当输入维度和实现约束未知时，本模块不会臆测精确 Big-O，而是展示可核查的源码结构证据。</div>
+    <div class="path-actions"><button class="small-btn ghost" onclick="showLearnTab('math')">Open Math Card / 查看数学卡片</button><button class="small-btn ghost" onclick="showLearnTab('graph')">Open Call Graph / 查看调用图</button></div>
+  </div>`;
+}
+
+// Learn V3: Quiz / 理解测试
+let quizAnswersOpen={};
+function buildQuizQuestions(x){
+  const methods=compareMethods(x);
+  const params=toList(x.params).length?toList(x.params):extractParamsFromCode(x.code||'');
+  const entity=String(x.entity||'this algorithm');
+  const moduleName=String(x.module||x.path||'—');
+  const q=[];
+  q.push({q:`What is the main learning object currently selected? / 当前选择的学习对象是什么？`,a:entity,why:'This checks whether you are tracking the exact class/function being explored. / 用于确认你正在学习的具体类或函数。'});
+  q.push({q:'Which module or source path contains it? / 它位于哪个模块或源码路径？',a:moduleName,why:'Location helps connect the concept to repository structure. / 位置有助于把概念与仓库结构对应起来。'});
+  if(methods.length) q.push({q:'Name one mathematical method/concept associated with it. / 写出一个与它相关的数学方法或概念。',a:String(methods[0]),why:`Detected math metadata: ${methods.slice(0,4).join(', ')}. / 检测到的数学元数据如上。`});
+  if(params.length) q.push({q:'Name one parameter visible in its metadata or signature. / 写出一个元数据或函数签名中的参数。',a:String(params[0]),why:`Visible parameters include: ${params.slice(0,6).join(', ')}. / 可见参数如上。`});
+  const sig=complexitySignals(x);
+  q.push({q:'What code-shape evidence would you inspect before claiming a runtime complexity? / 在判断时间复杂度前，应先检查哪些源码结构证据？',a:`Loops, matrix/vector operations, recursion, and input dimensions. Current snippet: ${sig.loops} loop keyword(s), ${sig.matrixOps} matrix/vector signal(s).`,why:'Exact Big-O requires knowing how operations scale with input dimensions; syntax alone is not enough. / 精确 Big-O 需要知道操作如何随输入规模增长，不能只看语法。'});
+  return q.slice(0,5);
+}
+function toggleQuizAnswer(i){ quizAnswersOpen[i]=!quizAnswersOpen[i]; renderQuiz(); }
+function resetQuiz(){ quizAnswersOpen={}; renderQuiz(); }
+function renderQuiz(){
+  const box=document.getElementById('quizBox'), x=selectedItem;
+  if(!x){ box.innerHTML='<div class="placeholder">Select an algorithm first / 请先选择一个算法</div>'; return; }
+  const qs=buildQuizQuestions(x);
+  box.className='';
+  box.innerHTML=`<div class="learn-section"><h4>Source-aware Quiz / 源码理解测试</h4>
+    <div class="learn-note">Questions are generated from the currently selected repository metadata and visible source. They are for self-checking, not grading. / 题目根据当前仓库元数据和可见源码生成，用于自测，不用于评分。</div>
+    ${qs.map((it,i)=>`<div class="quiz-card"><div class="quiz-index">Q${i+1}</div><div><b>${escapeHtml(it.q)}</b><div style="margin-top:9px"><button class="small-btn ghost" onclick="toggleQuizAnswer(${i})">${quizAnswersOpen[i]?'Hide answer / 收起答案':'Show answer / 查看答案'}</button></div>${quizAnswersOpen[i]?`<div class="quiz-answer"><b>Answer / 答案：</b> ${escapeHtml(it.a)}<br><span class="meta">${escapeHtml(it.why)}</span></div>`:''}</div></div>`).join('')}
+    <div class="path-actions"><button class="small-btn ghost" onclick="resetQuiz()">Reset / 重置</button><button class="small-btn ghost" onclick="showLearnTab('path')">Review Path / 回顾学习路径</button></div>
+  </div>`;
 }
 
 function escapeHtml(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
