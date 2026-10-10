@@ -36,7 +36,7 @@ app = FastAPI(title="Code X-Ray")
 db.init_db()  # 启动时确保库表存在（含 v2 新增列）
 
 SAMPLE_PATH = os.path.join(REPO_ROOT, "sample", "sample_code.py")
-LEGACY_FRONTEND_PATH = os.path.join(REPO_ROOT, "frontend", "index.html")
+LEGACY_FRONTEND_PATH = os.path.join(REPO_ROOT, "frontend", "legacy-index.html")
 FRONTEND_DIST_PATH = os.path.join(REPO_ROOT, "frontend", "dist")
 FRONTEND_INDEX_PATH = os.path.join(FRONTEND_DIST_PATH, "index.html")
 FRONTEND_ASSETS_PATH = os.path.join(FRONTEND_DIST_PATH, "assets")

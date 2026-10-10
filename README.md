@@ -9,10 +9,10 @@ Code X-Ray 把 NumPy-ML 算法仓库转换成可搜索、可学习的交互式�
 ```text
 Code-X-ray_Numpy-ml/
 ├── backend/                  # FastAPI、检索、学习模块和数据库适配
-├── frontend/
-│   ├── dist/                 # 已构建的 React 网站，FastAPI 直接托管
-│   └── index.html            # 旧版页面，仅作为构建缺失时的备用页
-├── web/                      # React + TypeScript + Vite 前端源码
+├── frontend/                 # React + TypeScript + Vite 前端源码
+│   ├── src/
+│   ├── dist/                 # 已构建的网站，FastAPI 直接托管
+│   └── legacy-index.html     # 旧版页面，仅作为构建缺失时的备用页
 ├── data/
 │   ├── code_x_ray.sqlite3    # 已建立索引的演示数据库
 │   └── learn_content.json
@@ -65,7 +65,7 @@ bash scripts/run.sh
 再开一个终端：
 
 ```bash
-cd web
+cd frontend
 npm ci
 npm run dev
 ```
@@ -81,7 +81,7 @@ Vite 会把 `/api` 代理到 `http://127.0.0.1:8000`。
 修改完成后生成正式页面：
 
 ```bash
-cd web
+cd frontend
 npm run build
 ```
 
@@ -157,7 +157,7 @@ MYSQL_DB=code_x_ray
 ## 提交前检查
 
 ```bash
-cd web
+cd frontend
 npm run build
 cd ..
 python -m pytest
