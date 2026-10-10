@@ -489,6 +489,8 @@ def _get_model():
 
 def embed(text):
     """生成文本向量。有 EMBEDDING_API_KEY 走 API，否则本地模型（默认）。"""
+    if os.environ.get("EMBEDDING_BACKEND", "").lower() == "hash":
+        return _embed_hash(text)
     key = os.environ.get("EMBEDDING_API_KEY")
     if key:
         return _embed_api(text, key)

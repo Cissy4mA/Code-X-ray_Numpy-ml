@@ -18,10 +18,15 @@ def reset_all():
     """清空六张表，方便反复演示/测试（demo 用，生产不需要）。"""
     conn = db.get_conn()
     cur = conn.cursor()
-    cur.execute("SET FOREIGN_KEY_CHECKS=0")
+    if not db.is_sqlite():
+        cur.execute("SET FOREIGN_KEY_CHECKS=0")
     for t in ("functions", "algorithms", "code_files", "modules", "projects"):
-        cur.execute(f"TRUNCATE TABLE {t}")
-    cur.execute("SET FOREIGN_KEY_CHECKS=1")
+        if db.is_sqlite():
+            cur.execute(f"DELETE FROM {t}")
+        else:
+            cur.execute(f"TRUNCATE TABLE {t}")
+    if not db.is_sqlite():
+        cur.execute("SET FOREIGN_KEY_CHECKS=1")
     conn.close()
 
 
@@ -97,18 +102,23 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
     if reset_first:
         reset_all()
 
-    tmp = tempfile.mkdtemp(prefix="codexray_")
-    try:
-        subprocess.run(
-            ["git", "clone", "--depth", "1", "-b", branch, repo_url, tmp],
-            check=True, capture_output=True, text=True, timeout=300,
-        )
-    except subprocess.CalledProcessError as e:
-        shutil.rmtree(tmp, ignore_errors=True)
-        return {"error": "git clone failed", "detail": (e.stderr or "")[:500]}
-    except subprocess.TimeoutExpired:
-        shutil.rmtree(tmp, ignore_errors=True)
-        return {"error": "git clone timeout (>300s)"}
+    cleanup_tmp = False
+    if os.path.isdir(repo_url):
+        tmp = repo_url
+    else:
+        tmp = tempfile.mkdtemp(prefix="codexray_")
+        cleanup_tmp = True
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", "-b", branch, repo_url, tmp],
+                check=True, capture_output=True, text=True, timeout=300,
+            )
+        except subprocess.CalledProcessError as e:
+            shutil.rmtree(tmp, ignore_errors=True)
+            return {"error": "git clone failed", "detail": (e.stderr or "")[:500]}
+        except subprocess.TimeoutExpired:
+            shutil.rmtree(tmp, ignore_errors=True)
+            return {"error": "git clone timeout (>300s)"}
 
     # 用一个项目统领整个仓库
     repo_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "") or "repo"
@@ -168,12 +178,22 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
         # 方案 3：为模块生成「富集语义向量」——name + 算法族 + 别名 + README 一起编码，
         # 让模块级语义检索能命中别名/概念层（如 "normalize and scale features" -> preprocessing）
         readme_vec = parser.embed_module(module, family, aliases, readme) if readme else [0.0] * parser.DIM
-        cur.execute(
-            "INSERT INTO modules(project_id,name,family,task,readme,aliases,readme_embedding) VALUES(%s,%s,%s,%s,%s,%s,%s) "
-            "ON DUPLICATE KEY UPDATE family=VALUES(family), task=VALUES(task), readme=VALUES(readme), "
-            "aliases=VALUES(aliases), readme_embedding=VALUES(readme_embedding)",
-            (project_id, module, family, "other", readme, json.dumps(aliases, ensure_ascii=False), json.dumps(readme_vec)),
-        )
+        if db.is_sqlite():
+            cur.execute(
+                "INSERT INTO modules(project_id,name,family,task,readme,aliases,readme_embedding) "
+                "VALUES(%s,%s,%s,%s,%s,%s,%s) "
+                "ON CONFLICT(project_id,name) DO UPDATE SET "
+                "family=excluded.family, task=excluded.task, readme=excluded.readme, "
+                "aliases=excluded.aliases, readme_embedding=excluded.readme_embedding",
+                (project_id, module, family, "other", readme, json.dumps(aliases, ensure_ascii=False), json.dumps(readme_vec)),
+            )
+        else:
+            cur.execute(
+                "INSERT INTO modules(project_id,name,family,task,readme,aliases,readme_embedding) VALUES(%s,%s,%s,%s,%s,%s,%s) "
+                "ON DUPLICATE KEY UPDATE family=VALUES(family), task=VALUES(task), readme=VALUES(readme), "
+                "aliases=VALUES(aliases), readme_embedding=VALUES(readme_embedding)",
+                (project_id, module, family, "other", readme, json.dumps(aliases, ensure_ascii=False), json.dumps(readme_vec)),
+            )
         cur.execute("SELECT id FROM modules WHERE project_id=%s AND name=%s", (project_id, module))
         module_id_map[module] = cur.fetchone()[0]
     conn.close()
@@ -195,5 +215,6 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
             except Exception:
                 # 单个文件解析失败不阻断整体导入
                 continue
-    shutil.rmtree(tmp, ignore_errors=True)
+    if cleanup_tmp:
+        shutil.rmtree(tmp, ignore_errors=True)
     return {"repo": repo_url, "project": repo_name, "files": files, "chunks": chunks}
