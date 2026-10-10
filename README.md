@@ -1,104 +1,171 @@
 # Code X-Ray · NumPy-ML 机器学习算法源码透视与交互式学习平台
 
-把 NumPy-ML 这类算法仓库，像做 X 光一样“透视”给学习者看：精确/模糊双模式检索 +
-知识卡片 + 算法对比 + 学习路径 + 调用关系图，降低机器学习源码的学习门槛。
+Code X-Ray 把 NumPy-ML 算法仓库转换成可搜索、可学习的交互式网站，提供模块浏览、算法检索、数学卡片、学习路径、相关函数、调用结构和算法对比。
 
-## 一、目录结构
+仓库已经包含新版 React 前端、FastAPI 后端和 SQLite 演示索引。clone 后无需安装 MySQL，也无需重新导入 NumPy-ML 数据。
 
-```
-code-x-ray/
-├── backend/                 # 后端（FastAPI）
-│   ├── app.py              # 装配入口 + 元接口（只接线）
-│   ├── db.py               # 数据库连接 + 建表（agent 维护，人不改）
-│   ├── parser.py           # 代码切分 + embedding（含模块别名，导入时写入库）
-│   ├── index_pipeline.py   # 入库管线：粘贴代码 / 导入 GitHub 仓库（稳定）
-│   ├── retrieval.py        # 检索精度【分工1】核心改动区
-│   └── learn.py            # 学习板块功能【分工2：两人】
+## 项目结构
+
+```text
+Code-X-ray_Numpy-ml/
+├── backend/                  # FastAPI、检索、学习模块和数据库适配
 ├── frontend/
-│   └── index.html          # 前端单页（由 FastAPI 同源托管，无需 CORS）
-├── tests/                  # 全部测试代码（eval_test 亦被 app 加载提供 /api/eval 端点）
-│   ├── eval_test.py        # 检索评估与测试【分工3】
-│   └── test_third_part.py  # 第三部分 3.1→3.2 真实流程极端用例实跑
-├── scripts/
-│   ├── deploy.sh           # 一键部署（建 venv→装依赖→建库→导入数据→启动）
-│   ├── run.sh              # 日常启动
-│   ├── export_db.sh        # 导出数据库 dump（本地用，不进版本库）
-│   ├── migrations/         # 历史迁移/工具脚本（留档）
-│   └── test_demo.py
+│   ├── dist/                 # 已构建的 React 网站，FastAPI 直接托管
+│   └── index.html            # 旧版页面，仅作为构建缺失时的备用页
+├── web/                      # React + TypeScript + Vite 前端源码
 ├── data/
-│   └── learn_content.json  # 学习板块内容模板
-├── sample/
-│   └── sample_code.py     # 示例代码（前端 /api/sample 返回）
+│   ├── code_x_ray.sqlite3    # 已建立索引的演示数据库
+│   └── learn_content.json
+├── tests/                    # 检索评估与测试
+├── scripts/
+│   ├── deploy.sh             # 首次安装并启动
+│   └── run.sh                # 已安装后的日常启动
+├── Dockerfile                # 公网容器部署入口
 ├── requirements.txt
-├── .env.example
-└── .gitignore
+└── .env.example
 ```
 
-**各分工改对应文件，合并时几乎零冲突：**
-| 分工 | 负责人 | 文件 |
-|------|--------|------|
-| 检索精度提升 | 1 人 | `backend/retrieval.py`（权重/重排）、`backend/parser.py` 的 `embed()` |
-| 学习板块开发 | 2 人 | `backend/learn.py` + `data/learn_content.json` |
-| 检索评估与测试 | 1 人 | `tests/eval_test.py` |
-| 页面设计美化 | 1 人 | `frontend/index.html`（视觉/布局） |
-| 检索结果可视化 | 1 人 | `frontend/index.html`（Search 页） |
-| 学习板块可视化 | 1 人 | `frontend/index.html`（Learn 页） |
+## 一键在本机运行
 
----
+环境要求：
 
-## 二、环境要求
-
-- Python 3.10+（开发机用 3.13）
-- 本机 MySQL（推荐 XAMPP，默认 `root` 空密码，端口 3306）**需先启动**
-- 首次运行会下载 `all-MiniLM-L6-v2` embedding 模型（国内网络建议设 `HF_ENDPOINT` 镜像）
-
----
-
-## 三、一键部署
+- Python 3.10 或更高版本
+- 首次安装依赖和首次语义检索需要联网
+- Node.js 只在修改前端时需要；直接运行网站不需要 Node.js
 
 ```bash
 git clone https://github.com/Cissy4mA/Code-X-ray_Numpy-ml.git
 cd Code-X-ray_Numpy-ml
-cp .env.example .env        # 按需改 MySQL 账号；国内网络改 HF_ENDPOINT 镜像
+cp .env.example .env
 bash scripts/deploy.sh
 ```
-> 把上面这串命令直接丢给 agent,它会自己 clone → 建 venv → 装依赖 → 建库表 → 导入数据 → 启动。
 
-`deploy.sh` 会：建 venv → 装依赖 → 建库表 →
-**从 numpy-ml 自动导入数据**（无需准备数据库，与组长导入流程完全一致）→ 启动后端。
-> 部署加速（可选）：若仓库里存在 `data/code_x_ray.sql`，脚本会优先恢复它跳过导入；
-> 但**队友不用管这个文件**——没有它也能跑，只是首次导入会多花几分钟下载模型+编码。
-启动后访问 http://127.0.0.1:8000 。
+启动后访问：
 
-日常只启动（已部署过）：`bash scripts/run.sh`
-
-（可选）导出数据库 dump 加速队友部署——**非必须**，仅当想省去队友首次导入时间时执行：
-```bash
-bash scripts/export_db.sh   # 生成 data/code_x_ray.sql，本地用，不进版本库
+```text
+http://127.0.0.1:8000
 ```
 
----
+以后再次启动：
 
-## 四、API 速查
+```bash
+bash scripts/run.sh
+```
+
+仓库自带约 4.8MB 的 SQLite 索引，因此部署脚本会跳过重新导入。第一次执行语义搜索时，`sentence-transformers` 可能下载本地模型；下载完成后会使用本机缓存。
+
+## 前端开发
+
+先在仓库根目录启动后端：
+
+```bash
+bash scripts/run.sh
+```
+
+再开一个终端：
+
+```bash
+cd web
+npm ci
+npm run dev
+```
+
+开发页面地址：
+
+```text
+http://127.0.0.1:3000
+```
+
+Vite 会把 `/api` 代理到 `http://127.0.0.1:8000`。
+
+修改完成后生成正式页面：
+
+```bash
+cd web
+npm run build
+```
+
+构建结果会直接写入 `frontend/dist/`，之后只需运行 FastAPI，前端和 API 就会使用同一个域名。
+
+## Docker / 公网部署
+
+本地验证容器：
+
+```bash
+docker build -t code-x-ray .
+docker run --rm -p 8000:8000 code-x-ray
+```
+
+然后访问 `http://127.0.0.1:8000`。
+
+支持 Dockerfile 的云平台可以直接连接本仓库部署。服务启动命令已经兼容平台提供的 `PORT` 环境变量。
+
+生产环境建议保留：
+
+```env
+DB_BACKEND=sqlite
+SQLITE_PATH=data/code_x_ray.sqlite3
+ENABLE_ADMIN_API=0
+```
+
+`ENABLE_ADMIN_API=0` 会关闭清库、重新导入、调试和评测接口，避免公网用户操作数据库或触发高负载任务。普通搜索、模块浏览、学习页面和健康检查不受影响。
+
+如果平台使用临时文件系统，内置 SQLite 数据仍然可用于只读演示；若未来允许用户导入仓库并长期保存数据，应改用持久磁盘或托管数据库。
+
+## 主要 API
 
 | 方法 | 路径 | 说明 |
-|------|------|------|
-| GET  | `/api/sample` | 示例代码 |
-| POST | `/api/index` | 粘贴代码入库 |
-| POST | `/api/index_repo` | 从 GitHub 导入仓库（默认 numpy-ml） |
-| POST | `/api/search` | 混合检索（top_k / module / family / task 过滤） |
-| GET  | `/api/modules` | 模块列表 + README 原文 |
-| GET  | `/api/debug/chunks` | 浏览全部 chunk 与向量头 |
-| POST | `/api/debug/search` | 拆解一次检索的打分明细 |
-| GET  | `/api/learn/modules` `/card` `/compare` `/path` `/call_graph` | 学习板块 |
-| GET  | `/api/eval` | 跑评测集，返回 MRR / Hit@k |
-| GET  | `/api/smoke` | 连通性冒烟 |
+|---|---|---|
+| GET | `/api/stats` | 数据库统计 |
+| GET | `/api/modules` | 模块列表和 README |
+| POST | `/api/modules/search` | 模块检索 |
+| POST | `/api/search` | 算法混合检索 |
+| GET | `/api/learn/card` | 数学原理卡片 |
+| GET | `/api/learn/compare` | 算法对比 |
+| GET | `/api/learn/path` | 学习路径 |
+| GET | `/api/learn/call_graph` | 调用关系图 |
+| GET | `/api/smoke` | 数据库冒烟检查 |
 
----
+以下接口受 `ENABLE_ADMIN_API` 控制：
 
-## 五、本地开发约定
+- `/api/reset`
+- `/api/index`
+- `/api/index_repo`
+- `/api/debug/*`
+- `/api/eval*`
 
-1. **不要改别人的文件**：检索改 `retrieval.py`、学习板块改 `learn.py`、评估改 `tests/eval_test.py`，
-   其余（`app.py`/`db.py`/`parser.py`/`index_pipeline.py`）由组长/agent 维护。
-2. 前端三人各认领一块，改 `frontend/index.html` 前先和后端对好接口字段。
-3. 每个人随时用中文记流水账，最后发给论文主笔汇总。
+## 数据库选择
+
+默认使用仓库内置 SQLite：
+
+```env
+DB_BACKEND=sqlite
+SQLITE_PATH=data/code_x_ray.sqlite3
+```
+
+如需切换 MySQL：
+
+```env
+DB_BACKEND=mysql
+MYSQL_HOST=127.0.0.1
+MYSQL_USER=root
+MYSQL_PASSWORD=
+MYSQL_PORT=3306
+MYSQL_DB=code_x_ray
+```
+
+## 提交前检查
+
+```bash
+cd web
+npm run build
+cd ..
+python -m pytest
+```
+
+至少还应启动一次网站并检查：
+
+- 首页、Browse 和 Learn 页面可以切换
+- GitHub 图标跳转到本仓库
+- 模块搜索和算法搜索能返回数据
+- `Open the Learn Page` 能进入所选算法的学习页面

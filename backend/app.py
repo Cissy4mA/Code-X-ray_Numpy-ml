@@ -23,8 +23,9 @@ TESTS_DIR = os.path.join(REPO_ROOT, "tests")
 if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend import db, parser
@@ -35,7 +36,22 @@ app = FastAPI(title="Code X-Ray")
 db.init_db()  # 启动时确保库表存在（含 v2 新增列）
 
 SAMPLE_PATH = os.path.join(REPO_ROOT, "sample", "sample_code.py")
-FRONTEND_PATH = os.path.join(REPO_ROOT, "frontend", "index.html")
+LEGACY_FRONTEND_PATH = os.path.join(REPO_ROOT, "frontend", "index.html")
+FRONTEND_DIST_PATH = os.path.join(REPO_ROOT, "frontend", "dist")
+FRONTEND_INDEX_PATH = os.path.join(FRONTEND_DIST_PATH, "index.html")
+FRONTEND_ASSETS_PATH = os.path.join(FRONTEND_DIST_PATH, "assets")
+
+if os.path.isdir(FRONTEND_ASSETS_PATH):
+    app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_PATH), name="frontend-assets")
+
+ADMIN_API_ENABLED = os.environ.get("ENABLE_ADMIN_API", "1").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+
+
+def require_admin_api():
+    if not ADMIN_API_ENABLED:
+        raise HTTPException(status_code=403, detail="Admin API is disabled")
 
 
 class IndexReq(BaseModel):
@@ -74,6 +90,7 @@ def sample():
 @app.post("/api/reset")
 def reset():
     """清空六张表，方便反复演示/测试（demo 用，生产不需要）。"""
+    require_admin_api()
     index_pipeline.reset_all()
     return {"reset": True}
 
@@ -129,11 +146,13 @@ def stats():
 # ---------------------------------------------------------------------------
 @app.post("/api/index")
 def index(req: IndexReq):
+    require_admin_api()
     return index_pipeline.index_pasted(req.code, req.filename)
 
 
 @app.post("/api/index_repo")
 def index_repo(req: IndexRepoReq):
+    require_admin_api()
     return index_pipeline.index_repo(req.repo_url, req.branch, req.reset_first)
 
 
@@ -147,11 +166,13 @@ def search(req: SearchReq):
 
 @app.get("/api/debug/chunks")
 def debug_chunks():
+    require_admin_api()
     return retrieval.debug_chunks()
 
 
 @app.post("/api/debug/search")
 def debug_search(req: SearchReq):
+    require_admin_api()
     return retrieval.debug_search(req)
 
 
@@ -210,17 +231,20 @@ def learn_call_graph(module: str = "", entity: str = "", path: str = ""):
 # ---------------------------------------------------------------------------
 @app.get("/api/eval")
 def eval_endpoint():
+    require_admin_api()
     return eval_test.evaluate()
 
 
 @app.get("/api/eval/modules")
 def eval_modules_endpoint():
+    require_admin_api()
     return eval_test.evaluate_modules()
 
 
 @app.get("/api/eval/class_search")
 def eval_class_search_endpoint(kw_weight: float = 0.2, top_k: int = 5):
     """3.2 分类检索评测；kw_weight 为 keyword 通道权重，semantic = 1 - kw_weight。"""
+    require_admin_api()
     return eval_test.evaluate_class_search(kw_weight=kw_weight, top_k=top_k)
 
 
@@ -234,10 +258,27 @@ def smoke_endpoint():
 # ---------------------------------------------------------------------------
 @app.get("/")
 def index_page():
+    frontend_path = FRONTEND_INDEX_PATH if os.path.isfile(FRONTEND_INDEX_PATH) else LEGACY_FRONTEND_PATH
     return FileResponse(
-        FRONTEND_PATH,
+        frontend_path,
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
+
+
+@app.get("/{frontend_path:path}")
+def frontend_fallback(frontend_path: str):
+    """Serve the React entry point for direct browser navigation.
+
+    Unknown API paths remain real 404 responses instead of returning HTML.
+    """
+    if frontend_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="API route not found")
+    if os.path.isfile(FRONTEND_INDEX_PATH):
+        return FileResponse(
+            FRONTEND_INDEX_PATH,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
+    raise HTTPException(status_code=404, detail="Frontend build not found")
 
 
 if __name__ == "__main__":

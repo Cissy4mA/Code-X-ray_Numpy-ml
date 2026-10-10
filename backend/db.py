@@ -1,32 +1,252 @@
-"""XAMPP MySQL 连接与建表（零额外配置，root 空密码）。
+"""Database connection and schema setup.
 
-这就是「前端 ↔ SQL」链路里最底层的那根线：
-后端 FastAPI 通过 pymysql 连到本地 XAMPP 的 MySQL，
-所有 chunk / 文件 / 项目元数据落在 projects / code_files / algorithms /
-functions / modules 等表中；代码 chunk 以「类→algorithms、函数→functions」
-两级存储，各自的 embedding_json 列存放向量（不再使用 code_chunks 废弃表）。
+Default is SQLite for local demos. Set DB_BACKEND=mysql to use the original
+XAMPP/MySQL setup.
 """
 import os
+import re
+import sqlite3
+
 import pymysql
 
-# 支持环境变量覆盖，方便队友按本地 XAMPP 配置调整（默认值针对本机 XAMPP）
-HOST = os.environ.get("MYSQL_HOST", "127.0.0.1")        # XAMPP MySQL 监听地址
-USER = os.environ.get("MYSQL_USER", "root")            # XAMPP 默认账号
-PASSWORD = os.environ.get("MYSQL_PASSWORD", "")        # XAMPP 默认 root 空密码
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BACKEND = os.environ.get("DB_BACKEND", "sqlite").lower()
+
+# MySQL defaults target local XAMPP.
+HOST = os.environ.get("MYSQL_HOST", "127.0.0.1")
+USER = os.environ.get("MYSQL_USER", "root")
+PASSWORD = os.environ.get("MYSQL_PASSWORD", "")
 PORT = int(os.environ.get("MYSQL_PORT", "3306"))
 DB = os.environ.get("MYSQL_DB", "code_x_ray")
 
+SQLITE_PATH = os.environ.get(
+    "SQLITE_PATH",
+    os.path.join(REPO_ROOT, "data", "code_x_ray.sqlite3"),
+)
+
+
+def is_sqlite():
+    return BACKEND == "sqlite"
+
+
+class CompatCursor:
+    """Small MySQL-to-SQLite adapter for this app's limited SQL usage."""
+
+    def __init__(self, cur):
+        self.cur = cur
+        self._lastrowid = None
+
+    @property
+    def lastrowid(self):
+        return self.cur.lastrowid
+
+    def execute(self, sql, params=None):
+        params = list(params or [])
+        if is_sqlite():
+            sql, params = _sqlite_sql(sql, params)
+        res = self.cur.execute(sql, params)
+        if is_sqlite():
+            self.cur.connection.commit()
+        self._lastrowid = self.cur.lastrowid
+        return res
+
+    def fetchone(self):
+        return self.cur.fetchone()
+
+    def fetchall(self):
+        return self.cur.fetchall()
+
+
+class CompatConn:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def cursor(self):
+        return CompatCursor(self.conn.cursor())
+
+    def close(self):
+        self.conn.close()
+
+
+def _expand_in_params(sql, params):
+    """Expand one %s placeholder when its param is a tuple/list for IN clauses."""
+    out_params = []
+    for p in params:
+        if isinstance(p, (tuple, list, set)):
+            values = list(p)
+            placeholders = ",".join(["?"] * len(values)) or "NULL"
+            sql = sql.replace("%s", f"({placeholders})", 1)
+            out_params.extend(values)
+        else:
+            sql = sql.replace("%s", "?", 1)
+            out_params.append(p)
+    return sql, out_params
+
+
+def _keyword_score_expr(query):
+    terms = [t.lower() for t in re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", query or "") if len(t) > 1]
+    if not terms:
+        return 0.0
+    return float(len(terms))
+
+
+def _sqlite_sql(sql, params):
+    stripped = sql.strip()
+    upper = stripped.upper()
+
+    if upper.startswith("SET FOREIGN_KEY_CHECKS"):
+        return "SELECT 1", []
+    if upper.startswith("TRUNCATE TABLE"):
+        table = stripped.split()[-1]
+        return f"DELETE FROM {table}", []
+
+    sql = sql.replace("`references`", "refs")
+    sql = re.sub(r"MATCH\(code_text,name,embedding_text\) AGAINST\(%s IN BOOLEAN MODE\)", "?", sql)
+    if "MATCH(code_text,name,embedding_text)" in sql:
+        # Should be handled above, but keep a defensive fallback.
+        sql = re.sub(r"MATCH\(code_text,name,embedding_text\).*?AS kw", "? AS kw", sql)
+
+    if " AS kw" in sql and params:
+        params = [_keyword_score_expr(params[0])] + list(params[1:])
+
+    sql, params = _expand_in_params(sql, params)
+    return sql, params
+
 
 def get_conn():
-    return pymysql.connect(host=HOST, user=USER, password=PASSWORD,
-                           port=PORT, database=DB, charset="utf8mb4",
-                           autocommit=True)
+    if is_sqlite():
+        os.makedirs(os.path.dirname(SQLITE_PATH), exist_ok=True)
+        conn = sqlite3.connect(SQLITE_PATH)
+        conn.execute("PRAGMA foreign_keys=ON")
+        return CompatConn(conn)
+    return pymysql.connect(
+        host=HOST, user=USER, password=PASSWORD, port=PORT, database=DB,
+        charset="utf8mb4", autocommit=True,
+    )
 
 
-# 首次启动时若库/表不存在就建好，保证 demo 一键可跑
-_CREATE_DB = f"CREATE DATABASE IF NOT EXISTS `{DB}` CHARACTER SET utf8mb4"
+def _mysql_init_db():
+    c = pymysql.connect(host=HOST, user=USER, password=PASSWORD, port=PORT, charset="utf8mb4")
+    try:
+        c.cursor().execute(f"CREATE DATABASE IF NOT EXISTS `{DB}` CHARACTER SET utf8mb4")
+    finally:
+        c.close()
 
-_TABLES = [
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        for t in _MYSQL_TABLES:
+            cur.execute(t)
+        for m in _MYSQL_MIGRATIONS:
+            try:
+                cur.execute(m)
+            except Exception:
+                pass
+    finally:
+        conn.close()
+
+
+def _sqlite_init_db():
+    conn = sqlite3.connect(SQLITE_PATH)
+    try:
+        conn.execute("PRAGMA foreign_keys=ON")
+        cur = conn.cursor()
+        for t in _SQLITE_TABLES:
+            cur.execute(t)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def init_db():
+    if is_sqlite():
+        _sqlite_init_db()
+    else:
+        _mysql_init_db()
+
+
+_SQLITE_TABLES = [
+    """CREATE TABLE IF NOT EXISTS projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""",
+    """CREATE TABLE IF NOT EXISTS modules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        family TEXT,
+        task TEXT,
+        description TEXT,
+        readme TEXT,
+        aliases TEXT,
+        readme_embedding TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(project_id, name)
+    )""",
+    """CREATE TABLE IF NOT EXISTS code_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        module_id INTEGER,
+        path TEXT NOT NULL,
+        module TEXT,
+        language TEXT DEFAULT 'python',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""",
+    """CREATE TABLE IF NOT EXISTS algorithms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_id INTEGER NOT NULL,
+        name TEXT,
+        module TEXT,
+        family TEXT,
+        task TEXT,
+        math_methods TEXT,
+        params TEXT,
+        refs TEXT,
+        docstring_math TEXT,
+        complexity REAL,
+        ref_edges TEXT,
+        call_edges TEXT,
+        start_line INTEGER,
+        end_line INTEGER,
+        code_text TEXT NOT NULL,
+        embedding_text TEXT,
+        embedding_json TEXT,
+        chunk_metadata TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (file_id) REFERENCES code_files(id) ON DELETE CASCADE
+    )""",
+    """CREATE TABLE IF NOT EXISTS functions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_id INTEGER NOT NULL,
+        class_id INTEGER,
+        name TEXT,
+        parent_class TEXT,
+        module TEXT,
+        family TEXT,
+        task TEXT,
+        math_methods TEXT,
+        params TEXT,
+        refs TEXT,
+        docstring_math TEXT,
+        complexity REAL,
+        ref_edges TEXT,
+        call_edges TEXT,
+        start_line INTEGER,
+        end_line INTEGER,
+        code_text TEXT NOT NULL,
+        embedding_text TEXT,
+        embedding_json TEXT,
+        chunk_metadata TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (file_id) REFERENCES code_files(id) ON DELETE CASCADE,
+        FOREIGN KEY (class_id) REFERENCES algorithms(id) ON DELETE CASCADE
+    )""",
+]
+
+
+_MYSQL_TABLES = [
     """CREATE TABLE IF NOT EXISTS projects (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -39,9 +259,9 @@ _TABLES = [
         family VARCHAR(128),
         task VARCHAR(64),
         description TEXT,
-        readme TEXT,                              -- 模块对应的 GitHub README 原文（numpy_ml/<module>/README.md）
-        aliases TEXT,                             -- 模块全称/缩写/中英文别名 JSON 数组，模块搜索时一并匹配
-        readme_embedding TEXT,                    -- 模块 README 语义向量（384 维 JSON），模块语义检索用
+        readme TEXT,
+        aliases TEXT,
+        readme_embedding TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uk_module_name (project_id, name),
         INDEX idx_modules_project (project_id)
@@ -119,47 +339,11 @@ _TABLES = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
 ]
 
-# 旧版本表结构迁移：新增字段 + 重建 FULLTEXT 索引以覆盖 embedding_text
-# MariaDB 支持 ADD COLUMN IF NOT EXISTS；其他 MySQL 分支若不支持会被 try/except 忽略。
-_MIGRATIONS = [
-    "DROP TABLE IF EXISTS code_chunks",  # 清理 v2 遗留的废弃表（数据已落在 algorithms/functions）
-    """CREATE TABLE IF NOT EXISTS modules (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        project_id INT NOT NULL,
-        name VARCHAR(128) NOT NULL,
-        family VARCHAR(128),
-        task VARCHAR(64),
-        description TEXT,
-        readme TEXT,                              -- 模块对应的 GitHub README 原文（numpy_ml/README.md 分段）
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uk_module_name (project_id, name),
-        INDEX idx_modules_project (project_id)
-    ) ENGINE=InnoDB""",
+_MYSQL_MIGRATIONS = [
+    "DROP TABLE IF EXISTS code_chunks",
     "ALTER TABLE modules ADD COLUMN IF NOT EXISTS readme TEXT",
     "ALTER TABLE modules ADD COLUMN IF NOT EXISTS aliases TEXT",
     "ALTER TABLE modules ADD COLUMN IF NOT EXISTS readme_embedding TEXT",
     "ALTER TABLE code_files ADD COLUMN IF NOT EXISTS module VARCHAR(128)",
     "ALTER TABLE code_files ADD COLUMN IF NOT EXISTS module_id INT",
 ]
-
-
-def init_db():
-    c = pymysql.connect(host=HOST, user=USER, password=PASSWORD, port=PORT, charset="utf8mb4")
-    try:
-        c.cursor().execute(_CREATE_DB)
-    finally:
-        c.close()
-
-    conn = get_conn()
-    try:
-        cur = conn.cursor()
-        for t in _TABLES:
-            cur.execute(t)
-        for m in _MIGRATIONS:
-            try:
-                cur.execute(m)
-            except Exception:
-                # 字段/索引已存在或当前分支不支持该语法时忽略
-                pass
-    finally:
-        conn.close()

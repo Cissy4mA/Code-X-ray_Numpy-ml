@@ -15,15 +15,21 @@ __pycache__/
 
 # 数据库导出 dump（体积大，按需本地生成，不进版本库）
 data/*.sql
+data/*.sqlite3
+# 随仓库提供可直接运行的 numpy-ml 演示索引
+!data/code_x_ray.sqlite3
 
 # 模型权重（sentence-transformers 首次运行自动下载，不进版本库）
 models/
 .cache/
 *~
 
-# 前端构建产物（若有）
+# 前端依赖和普通构建产物
 node_modules/
 dist/
+# FastAPI 直接托管的正式前端构建需要进入仓库
+!frontend/dist/
+!frontend/dist/**
 
 # 本地进度/文档（不进版本库，仅组长本地用）
 检索系统技术演进记录.md

@@ -108,6 +108,22 @@ def expand_query(q):
     return (q + " " + " ".join(extra)).strip()
 
 
+def sqlite_keyword_score(text, query):
+    """Lightweight per-row keyword score used when MySQL FULLTEXT is unavailable."""
+    q_tokens = parser.tokenize(expand_query(query))
+    if not q_tokens:
+        return 0.0
+    hay = (text or "").lower()
+    score = 0.0
+    for t in q_tokens:
+        if t in hay:
+            score += 1.0
+    phrase = (query or "").strip().lower()
+    if phrase and phrase in hay:
+        score += 2.0
+    return score
+
+
 # 算法“昵称/黑话”→具体类名 token：口语化查询（如 q learning）直接拉满到具体算法类，
 # 既提升 FULLTEXT 关键词命中，也触发 3.2 的类名命中加权(*1.2)。补 SYNONYMS（缩写类）之外的缺口。
 NICKNAME = {
@@ -226,11 +242,17 @@ def rank(req):
         )
         rows = cur.fetchall()
         if rows:
-            cur.execute(
-                f"SELECT id, MATCH(code_text,name,embedding_text) AGAINST(%s IN BOOLEAN MODE) AS kw "
-                f"FROM {table}", (expand_query(req.query),)
-            )
-            kw_map = {r[0]: r[1] for r in cur.fetchall()}
+            if db.is_sqlite():
+                kw_map = {
+                    r[0]: sqlite_keyword_score(" ".join([str(r[1] or ""), str(r[-3] or "")]), req.query)
+                    for r in rows
+                }
+            else:
+                cur.execute(
+                    f"SELECT id, MATCH(code_text,name,embedding_text) AGAINST(%s IN BOOLEAN MODE) AS kw "
+                    f"FROM {table}", (expand_query(req.query),)
+                )
+                kw_map = {r[0]: r[1] for r in cur.fetchall()}
         else:
             kw_map = {}
         out = []
@@ -310,6 +332,10 @@ def class_search(req):
     游离函数（不属于任何分类）作为 'free_functions' 单独返回，仅在相关时列出。"""
     # 默认 keyword 权重 0.2，semantic 0.8；由 eval 网格搜索确定，eval 脚本可覆盖
     kw_weight = getattr(req, "kw_weight", 0.2)
+    if db.is_sqlite() and not hasattr(req, "kw_weight"):
+        # SQLite demo mode uses hash embeddings instead of the transformer model,
+        # so keyword evidence should dominate the default user-facing search.
+        kw_weight = 0.85
     return _class_search_weighted(req, kw_weight=kw_weight)
 
 
@@ -352,11 +378,17 @@ def _class_search_weighted(req, kw_weight=0.2):
     rows = cur.fetchall()
 
     if rows:
-        cur.execute(
-            "SELECT id, MATCH(code_text,name,embedding_text) AGAINST(%s IN BOOLEAN MODE) AS kw "
-            "FROM algorithms", (preprocess_query(req.query),)
-        )
-        kw_map = {r[0]: r[1] for r in cur.fetchall()}
+        if db.is_sqlite():
+            kw_map = {
+                r[0]: sqlite_keyword_score(" ".join([str(r[1] or ""), str(r[14] or ""), str(r[15] or "")]), req.query)
+                for r in rows
+            }
+        else:
+            cur.execute(
+                "SELECT id, MATCH(code_text,name,embedding_text) AGAINST(%s IN BOOLEAN MODE) AS kw "
+                "FROM algorithms", (preprocess_query(req.query),)
+            )
+            kw_map = {r[0]: r[1] for r in cur.fetchall()}
     else:
         kw_map = {}
 
@@ -433,16 +465,22 @@ def _class_search_weighted(req, kw_weight=0.2):
     )
     free_rows = cur.fetchall()
     if free_rows:
-        kw_where = "parent_class IS NULL OR parent_class=''"
-        kw_params = []
-        if req.module:
-            kw_where += " AND module=%s"; kw_params.append(req.module)
-        cur.execute(
-            f"SELECT id, MATCH(code_text,name,embedding_text) AGAINST(%s IN BOOLEAN MODE) AS kw "
-            f"FROM functions WHERE {kw_where}",
-            (expand_query(req.query),) + tuple(kw_params),
-        )
-        free_kw_map = {r[0]: r[1] for r in cur.fetchall()}
+        if db.is_sqlite():
+            free_kw_map = {
+                r[0]: sqlite_keyword_score(" ".join([str(r[1] or ""), str(r[6] or ""), str(r[8] or "")]), req.query)
+                for r in free_rows
+            }
+        else:
+            kw_where = "parent_class IS NULL OR parent_class=''"
+            kw_params = []
+            if req.module:
+                kw_where += " AND module=%s"; kw_params.append(req.module)
+            cur.execute(
+                f"SELECT id, MATCH(code_text,name,embedding_text) AGAINST(%s IN BOOLEAN MODE) AS kw "
+                f"FROM functions WHERE {kw_where}",
+                (expand_query(req.query),) + tuple(kw_params),
+            )
+            free_kw_map = {r[0]: r[1] for r in cur.fetchall()}
     else:
         free_kw_map = {}
 
