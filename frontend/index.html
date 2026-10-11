@@ -560,6 +560,8 @@ function showDetail(x){
   const changed=(key!==selectedKey);
   selectedKey=key;
   selectedItem=x;
+  // 换算法时收起上一次的答题状态，避免答案跨算法残留
+  if(changed) quizAnswersOpen={};
   const d=document.getElementById("detail"); const e=document.getElementById("detailEmpty");
   e.classList.add("hidden"); d.classList.remove("hidden");
   const methods=toList(x.math_methods);
@@ -594,6 +596,7 @@ function scrollToLearnBox(){ const title=document.getElementById('learnTitle'); 
 const LEARN_TABS=['math','path','rec','graph','compare','complexity','quiz'];
 
 function showLearnTab(name){
+  if(!LEARN_TABS.includes(name)) return;   // 未知标签名直接忽略（origin/main 的守卫，保留）
   currentLearnTab=name;
   LEARN_TABS.forEach(id=>document.getElementById('learn'+cap(id)).classList.add('hidden'));
   document.getElementById('learn'+cap(name)).classList.remove('hidden');
@@ -601,7 +604,7 @@ function showLearnTab(name){
   renderLearnPanel(name);
 }
 
-// 按标签名渲染对应面板；math 的内容由 showDetail 负责，此处不重复渲染。
+// 按标签名渲染对应面板；math 由 showDetail 负责、compare 由 compareItems 驱动，均不在此重复渲染。
 // 未选中对象时各面板自行给出空状态提示。
 function renderLearnPanel(name){
   if(name==='path') renderPath();
@@ -611,12 +614,11 @@ function renderLearnPanel(name){
   else if(name==='quiz') renderQuiz();
 }
 
-// 选中对象变化时调用：只刷新当前可见的 Learn 标签，避免内容停留在上一个算法。
+// 选中对象变化时调用：只重取当前可见的 Learn 标签，避免内容停留在上一个算法。
 function refreshLearnPanel(){
   if(currentLearnTab==='math') return;
   pathOpenNode=-1;
   window.__pathData=null;
-  quizAnswersOpen={};
   renderLearnPanel(currentLearnTab);
 }
 function cap(s){ return s[0].toUpperCase()+s.slice(1); }
