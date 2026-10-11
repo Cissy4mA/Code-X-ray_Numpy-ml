@@ -7,6 +7,7 @@
 """
 import json
 import os
+import re
 
 from backend import db
 
@@ -60,17 +61,217 @@ def compare(module):
     return {"module": module, "compare": m.get("compare", []) or []}
 
 
-def learning_path(module=None):
-    """返回学习路径（可整体或按模块）。"""
-    data = load_learn()
+def learning_path(module=None, algorithm=None):
+    """按选中的算法自动生成分步学习路径。
+
+    路径完全由索引库里的元数据推导：算法自身的数学方法、它所属的模块、
+    同模块的兄弟算法、以及源码规模与参数签名。因此换一个算法，
+    每一步的标题与内容都会随之变化，不需要人工预先为每个算法写死一条路径。
+    """
+    conn = db.get_conn()
+    cur = conn.cursor()
+    try:
+        target = _fetch_target(cur, module, algorithm)
+        if not target:
+            return {"module": module or "", "algorithm": algorithm or "", "steps": [],
+                    "note": "The selected algorithm was not found in the index. / 未在索引中找到该算法。"}
+
+        mod = target["module"] or target["path"]
+        cur.execute("SELECT family, description, readme FROM modules WHERE name=%s", (mod,))
+        mrow = cur.fetchone()
+        mod_family = (mrow[0] if mrow else "") or target["family"]
+        mod_desc = _first_sentence((mrow[1] if mrow else "") or (mrow[2] if mrow else ""))
+
+        cur.execute(
+            "SELECT a.name, a.start_line, a.end_line, a.math_methods, a.complexity, f.path "
+            "FROM algorithms a JOIN code_files f ON a.file_id=f.id "
+            "WHERE a.module=%s AND a.name<>%s ORDER BY a.name",
+            (mod, target["name"]))
+        siblings = [{
+            "name": r[0], "lines": f"{r[1]}-{r[2]}",
+            "math_methods": _json_list(r[3])[:3], "complexity": r[4], "path": r[5],
+        } for r in cur.fetchall()]
+
+        cur.execute("SELECT COUNT(*) FROM algorithms WHERE module=%s", (mod,))
+        mod_size = cur.fetchone()[0]
+    finally:
+        conn.close()
+
+    methods = target["math_methods"]
+    params = _merge_params(target["params"], _signature_params(target["code_text"]))
+
+    steps = [
+        {
+            "step": 1, "kind": "prerequisite",
+            "title": "数学前置 / Mathematical prerequisites",
+            "detail": (f"该算法在索引里标注了 {len(methods)} 个数学方法，先补齐它们所属的基础学科："
+                       if methods else
+                       "该算法没有标注数学方法，先复习下面几个通用基础更稳妥："),
+            "items": _foundation_groups(methods),
+        },
+        {
+            "step": 2, "kind": "module",
+            "title": f"模块定位 / Where it sits: {mod}",
+            "detail": (f"{target['name']} 属于 {mod} 模块，算法族为 {mod_family or '—'}，"
+                       f"任务类型为 {target['task'] or '—'}。该模块共 {mod_size} 个算法类。"
+                       + (f" {mod_desc}" if mod_desc else "")),
+            "items": [{
+                "name": "源码位置",
+                "note": f"{target['path']}:{target['start_line']}-{target['end_line']}",
+            }],
+        },
+        {
+            "step": 3, "kind": "module_survey",
+            "title": "同模块横向对照 / Compare with siblings",
+            "detail": (f"{mod} 模块里还有 {len(siblings)} 个同类算法。"
+                       "先横向扫一遍，理解这一族方法共同解决什么问题，再回到目标算法看它做了什么取舍。"
+                       if siblings else
+                       f"{mod} 模块里没有其他算法类，可以直接进入目标算法精读。"),
+            "items": [{
+                "name": s["name"],
+                "note": f"{s['path']}:{s['lines']}" + (
+                    " · " + ", ".join(str(m) for m in s["math_methods"]) if s["math_methods"] else ""),
+            } for s in siblings[:8]],
+        },
+        {
+            "step": 4, "kind": "target",
+            "title": f"目标算法精读 / {target['name']}",
+            "detail": (f"回到源码 {target['path']}:{target['start_line']}-{target['end_line']}，"
+                       f"该片段共 {target['code_lines']} 行。"),
+            "items": [
+                {"name": "关键参数", "note": ", ".join(str(p) for p in params[:8]) or "—"},
+                {"name": "数学方法", "note": ", ".join(str(m) for m in methods[:8]) or "—"},
+            ] + ([{"name": "开销参考值", "note": str(target["complexity"])}] if target.get("complexity") is not None else []),
+        },
+    ]
+
+    return {
+        "module": mod,
+        "algorithm": target["name"],
+        "steps": steps,
+        "source": {"path": target["path"], "lines": f"{target['start_line']}-{target['end_line']}"},
+        "note": ("Path is generated from indexed metadata (math methods, module membership, "
+                 "sibling algorithms, source size). It is a reading order, not a verified dependency proof. / "
+                 "路径由索引元数据自动生成，是阅读顺序建议，不是源码依赖关系的证明。"),
+    }
+
+
+# 数学方法关键词 → 基础学科。用于把算法自带的 math_methods 归到「该先补什么」。
+_FOUNDATIONS = [
+    ("线性代数 / Linear algebra",
+     ("vector", "matrix", "matrices", "linear", "orthogonal", "eigen", "svd",
+      "decomposition", "projection", "norm", "inner product", "dot product", "transpose")),
+    ("概率与统计 / Probability & statistics",
+     ("probability", "distribution", "gaussian", "normal", "bayes", "bayesian",
+      "posterior", "prior", "likelihood", "bernoulli", "multinomial", "dirichlet",
+      "beta", "gamma", "poisson", "categorical", "latent")),
+    ("微积分与梯度 / Calculus & gradients",
+     ("gradient", "derivative", "jacobian", "hessian", "backpropagation", "chain rule",
+      "differential", "gradient descent")),
+    ("数值优化 / Numerical optimization",
+     ("optimization", "descent", "newton", "conjugate", "momentum", "learning rate",
+      "convergence", "coordinate ascent", "em algorithm")),
+    ("信息论 / Information theory",
+     ("entropy", "information", "kl-divergence", "cross-entropy", "mutual information")),
+    ("采样与近似推断 / Sampling & approximate inference",
+     ("sampling", "monte carlo", "gibbs", "mcmc", "metropolis", "variational",
+      "mean-field", "approximation")),
+]
+
+_ALGO_COLS = ("name", "module", "family", "task", "math_methods", "params",
+              "docstring_math", "complexity", "start_line", "end_line",
+              "code_text", "path")
+
+
+def _algo_dict(row):
+    d = dict(zip(_ALGO_COLS, row))
+    d["math_methods"] = _json_list(d.get("math_methods"))
+    d["params"] = _json_list(d.get("params"))
+    d["code_lines"] = len((d.get("code_text") or "").splitlines())
+    return d
+
+
+def _fetch_target(cur, module=None, algorithm=None):
+    """定位目标实体：先按算法类名，再按成员函数名。
+
+    指定了算法名却没命中时直接返回 None，不再回退到「模块里的第一个算法」——
+    否则会出现用户点 A、路径却是 B 的情况。
+    """
+    cols = "a." + ", a.".join(_ALGO_COLS[:-1]) + ", f.path"
+    if algorithm:
+        tail = str(algorithm).split(".")[-1]
+        for table in ("algorithms", "functions"):
+            cur.execute(
+                f"SELECT {cols} FROM {table} a JOIN code_files f ON a.file_id=f.id "
+                "WHERE a.name=%s OR a.name=%s ORDER BY a.name LIMIT 1",
+                (algorithm, tail))
+            row = cur.fetchone()
+            if row:
+                return _algo_dict(row)
+        return None
     if module:
-        return {"module": module, "path": _module(module).get("path", []) or []}
-    # 整体路径：按各模块 path 顺序拼接
-    full = []
-    for name, m in data.get("modules", {}).items():
-        for step in (m.get("path", []) or []):
-            full.append({"module": name, **step} if isinstance(step, dict) else {"module": name, "step": step})
-    return {"path": full}
+        cur.execute(
+            f"SELECT {cols} FROM algorithms a JOIN code_files f ON a.file_id=f.id "
+            "WHERE a.module=%s ORDER BY a.name LIMIT 1", (module,))
+        row = cur.fetchone()
+        if row:
+            return _algo_dict(row)
+    return None
+
+
+def _foundation_groups(methods):
+    """把数学方法归入基础学科，按命中情况返回条目。"""
+    low = [str(m).lower() for m in methods]
+    hits = []
+    for title, keys in _FOUNDATIONS:
+        matched = sorted({str(m) for m, l in zip(methods, low) if any(k in l for k in keys)})
+        if matched:
+            hits.append({"name": title, "note": ", ".join(matched[:5])})
+    if not hits:
+        hits = [{"name": title, "note": "通用基础"} for title, _ in _FOUNDATIONS[:3]]
+    return hits[:4]
+
+
+def _merge_params(stored, from_code):
+    """合并元数据参数与签名解析参数。元数据里的值可能是逗号串，先拆开再去重保序。"""
+    out = []
+    for value in list(stored or []) + list(from_code or []):
+        for piece in str(value).split(","):
+            text = piece.strip()
+            if text and text not in out:
+                out.append(text)
+    return out
+
+
+def _signature_params(code):
+    """从源码签名解析参数名：优先 __init__，其次任意 def。"""
+    lines = (code or "").splitlines()
+    for want_init in (True, False):
+        for line in lines:
+            m = re.match(r"\s*def\s+(\w+)\s*\(([^)]*)\)", line)
+            if not m:
+                continue
+            if want_init and m.group(1) != "__init__":
+                continue
+            out = []
+            for part in m.group(2).split(","):
+                name = part.strip().split("=")[0].strip().lstrip("*")
+                if name and name not in ("self", "cls") and name not in out:
+                    out.append(name)
+            if out:
+                return out
+    return []
+
+
+def _first_sentence(text):
+    """取一段说明的开头，顺便剥掉 markdown 标记。"""
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text or "")
+    text = re.sub(r"[#*`>_|]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return ""
+    m = re.search(r"[.!?。！？]", text)
+    return text[:m.end()] if m and m.end() <= 160 else text[:120]
 
 
 def _json_list(value):
