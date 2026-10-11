@@ -114,6 +114,7 @@
 .free-section h4{margin:0 0 6px;font-size:13px;color:#475569}
 .free-item{display:inline-block;margin:2px 6px 2px 0;padding:4px 8px;background:#f1f5f9;border-radius:4px;font-size:12px}
 
+/* Learn V3: Complexity & Quiz (from PR #4 — local selectModule fix kept intact) */
 .complexity-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
 .complexity-card{border:1px solid #dbe4ee;border-radius:10px;padding:12px;background:#fbfdff;min-height:110px}
 .complexity-card ul{margin:8px 0 0;padding-left:18px}.complexity-card li{margin:5px 0;line-height:1.45}
@@ -336,9 +337,13 @@ async function doModuleSearch(){
 }
 
 function selectModule(name){
-  document.getElementById("fModule").value=name;
-  document.getElementById("query").focus();
+  // 点 3.1 模块卡片 → 自动把 3.1 查询与模块约束带入 3.2，用户无需重输
+  const srcQuery=document.getElementById("moduleQuery").value.trim();
+  document.getElementById("fModule").value=name;   // 3.2 模块过滤：自动锁定为点中的模块
+  document.getElementById("query").value=srcQuery; // 3.2 查询：自动填充为 3.1 原查询
   document.getElementById("sec32").scrollIntoView({behavior:"smooth", block:"start"});
+  if(srcQuery){ doSearch(); }                     // 有查询则直接触发 3.2，不用再点检索
+  else { document.getElementById("query").focus(); }
 }
 
 async function doSearch(){
@@ -466,7 +471,18 @@ function buildOverview(x, methods){
 }
 
 function showDetail(x){
+  const previousItem = selectedItem;
+  const changedSelection = !previousItem || previousItem !== x;
   selectedItem=x;
+  // Keep Learn V3 panels synchronized with the selected algorithm.
+  // Reset revealed quiz answers so answers from the previous class do not carry over.
+  if (changedSelection) quizAnswersOpen = {};
+  const activeLearnTab = document.querySelector('#learnTabs .tab.active');
+  if (activeLearnTab) {
+    const activeIndex = Array.from(document.querySelectorAll('#learnTabs .tab')).indexOf(activeLearnTab);
+    if (activeIndex === 6) renderQuiz();
+    if (activeIndex === 5) renderComplexity();
+  }
   const d=document.getElementById("detail"); const e=document.getElementById("detailEmpty");
   e.classList.add("hidden"); d.classList.remove("hidden");
   const methods=toList(x.math_methods);
@@ -498,11 +514,11 @@ function copyCode(){ const c=document.getElementById('codeBlock'); if(c){ naviga
 function scrollToLearnBox(){ const title=document.getElementById('learnTitle'); if(title) title.scrollIntoView({behavior:'smooth',block:'start'}); }
 
 function showLearnTab(name){
-  const learnTabs=['math','path','rec','graph','compare','complexity','quiz'];
-  learnTabs.forEach(id=>{ const el=document.getElementById('learn'+cap(id)); if(el) el.classList.add('hidden'); });
-  const target=document.getElementById('learn'+cap(name));
-  if(target) target.classList.remove('hidden');
-  document.querySelectorAll('#learnTabs .tab').forEach((t,i)=>t.classList.toggle('active',learnTabs[i]===name));
+  const tabs=['math','path','rec','graph','compare','complexity','quiz'];
+  if(!tabs.includes(name)) return;
+  tabs.forEach(id=>document.getElementById('learn'+cap(id)).classList.add('hidden'));
+  document.getElementById('learn'+cap(name)).classList.remove('hidden');
+  document.querySelectorAll('#learnTabs .tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===name));
   if(name==='path') renderPath();
   if(name==='rec') renderRec();
   if(name==='graph') renderGraph();
@@ -783,7 +799,6 @@ async function renderGraph(){
     box.innerHTML=`<div class="placeholder">Call graph failed / 调用图生成失败：${escapeHtml(String(e.message||e))}</div>`;
   }
 }
-
 
 // Learn V3: Complexity / 复杂度分析
 function complexitySignals(x){
