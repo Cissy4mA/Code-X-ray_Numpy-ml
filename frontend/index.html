@@ -471,7 +471,18 @@ function buildOverview(x, methods){
 }
 
 function showDetail(x){
+  const previousItem = selectedItem;
+  const changedSelection = !previousItem || previousItem !== x;
   selectedItem=x;
+  // Keep Learn V3 panels synchronized with the selected algorithm.
+  // Reset revealed quiz answers so answers from the previous class do not carry over.
+  if (changedSelection) quizAnswersOpen = {};
+  const activeLearnTab = document.querySelector('#learnTabs .tab.active');
+  if (activeLearnTab) {
+    const activeIndex = Array.from(document.querySelectorAll('#learnTabs .tab')).indexOf(activeLearnTab);
+    if (activeIndex === 6) renderQuiz();
+    if (activeIndex === 5) renderComplexity();
+  }
   const d=document.getElementById("detail"); const e=document.getElementById("detailEmpty");
   e.classList.add("hidden"); d.classList.remove("hidden");
   const methods=toList(x.math_methods);
@@ -503,12 +514,16 @@ function copyCode(){ const c=document.getElementById('codeBlock'); if(c){ naviga
 function scrollToLearnBox(){ const title=document.getElementById('learnTitle'); if(title) title.scrollIntoView({behavior:'smooth',block:'start'}); }
 
 function showLearnTab(name){
-  ['math','path','rec','graph','compare'].forEach(id=>document.getElementById('learn'+cap(id)).classList.add('hidden'));
+  const tabs=['math','path','rec','graph','compare','complexity','quiz'];
+  if(!tabs.includes(name)) return;
+  tabs.forEach(id=>document.getElementById('learn'+cap(id)).classList.add('hidden'));
   document.getElementById('learn'+cap(name)).classList.remove('hidden');
-  document.querySelectorAll('#learnTabs .tab').forEach((t,i)=>t.classList.toggle('active',['math','path','rec','graph','compare'][i]===name));
+  document.querySelectorAll('#learnTabs .tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===name));
   if(name==='path') renderPath();
   if(name==='rec') renderRec();
   if(name==='graph') renderGraph();
+  if(name==='complexity') renderComplexity();
+  if(name==='quiz') renderQuiz();
 }
 function cap(s){ return s[0].toUpperCase()+s.slice(1); }
 
