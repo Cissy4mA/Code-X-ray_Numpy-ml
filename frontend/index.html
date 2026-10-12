@@ -123,6 +123,14 @@
 .quiz-answer{margin-top:10px;padding:10px;border-left:3px solid #94a3b8;background:#f8fafc;border-radius:6px;line-height:1.5}
 @media(max-width:800px){.complexity-grid{grid-template-columns:1fr}}
 
+/* 3.2 搜索结果气泡 / search-result bubbles */
+.bubble-field{position:relative;height:236px;margin-top:12px;border:1px solid #e1e4e8;border-radius:10px;background:linear-gradient(180deg,#fbfdff,#eef2f7);overflow:hidden}
+.bubble{position:absolute;left:0;top:0;border-radius:50%;display:grid;place-items:center;text-align:center;font-size:12px;font-weight:600;cursor:pointer;user-select:none;will-change:transform;box-shadow:inset 0 -6px 14px rgba(15,23,42,.06),0 2px 10px rgba(15,23,42,.12);transition:box-shadow .18s ease}
+.bubble>span{display:block;padding:0 10px;line-height:1.25;word-break:break-word;max-width:92%}
+.bubble .bub-pct{display:block;font-size:10px;font-weight:500;opacity:.72;margin-top:2px}
+.bubble:hover{box-shadow:0 0 0 3px rgba(37,99,235,.30),0 10px 26px rgba(37,99,235,.34)}
+.bubble-dot{position:absolute;left:50%;transform:translateX(-50%);bottom:6px;font-size:11px;color:#94a3b8;pointer-events:none}
+
 </style>
 
 </head>
@@ -178,18 +186,19 @@
   <div style="max-width:90px"><label class="meta">Top-K (1-10)</label><input type="number" id="topk" value="3" min="1" max="10"></div>
   <div style="max-width:120px"><button onclick="doSearch()" data-page-node-id="x5">Search / 检索</button></div>
 </div>
+<div id="bubbleField" class="bubble-field hidden"></div>
 <div id="searchResult" data-page-node-id="x6" style="margin-top:10px"></div>
 
 <!-- 4. Learn / 学习 -->
 <h2 id="learnTitle" data-page-node-id="x7">4. Learn / 学习</h2>
 <div class="tabs" id="learnTabs">
-    <span class="tab active" onclick="showLearnTab('math')">Math Card / 数学卡片</span>
-    <span class="tab" onclick="showLearnTab('path')">Path / 学习路径</span>
-    <span class="tab" onclick="showLearnTab('rec')">Recommend / 相似推荐</span>
-    <span class="tab" onclick="showLearnTab('graph')">Call Graph / 调用图</span>
-    <span class="tab" onclick="showLearnTab('compare')">Compare / 算法对比</span>
-    <span class="tab" onclick="showLearnTab('complexity')">Complexity / 复杂度分析</span>
-    <span class="tab" onclick="showLearnTab('quiz')">Quiz / 理解测试</span>
+    <span class="tab active" data-tab="math" onclick="showLearnTab('math')">Math Card / 数学卡片</span>
+    <span class="tab" data-tab="path" onclick="showLearnTab('path')">Path / 学习路径</span>
+    <span class="tab" data-tab="rec" onclick="showLearnTab('rec')">Recommend / 相似推荐</span>
+    <span class="tab" data-tab="graph" onclick="showLearnTab('graph')">Call Graph / 调用图</span>
+    <span class="tab" data-tab="compare" onclick="showLearnTab('compare')">Compare / 算法对比</span>
+    <span class="tab" data-tab="complexity" onclick="showLearnTab('complexity')">Complexity / 复杂度分析</span>
+    <span class="tab" data-tab="quiz" onclick="showLearnTab('quiz')">Quiz / 理解测试</span>
 </div>
 <div id="learnBox" class="panel">
   <div id="learnMath">
@@ -237,6 +246,8 @@
 const BASE="http://127.0.0.1:8000";
 let currentResults=[];
 let selectedItem=null;
+let selectedKey=null;        // 当前选中对象的身份，用于判断 Path / Recommend / Call Graph 是否需要重新取数
+let currentLearnTab='math';  // 当前 Learn 标签，选中对象变化时据此刷新对应面板
 let compareItems=[];
 let allModules=[];
 
@@ -346,6 +357,79 @@ function selectModule(name){
   else { document.getElementById("query").focus(); }
 }
 
+// 3.2 搜索结果气泡：数量 = 返回条数(Top-K)，半径 = fused 相关性，位置自由漂浮。
+let bubbleState=null;
+function bubbleStop(){
+  if(bubbleState && bubbleState.raf) cancelAnimationFrame(bubbleState.raf);
+  bubbleState=null;
+}
+function renderBubbles(items){
+  const field=document.getElementById('bubbleField');
+  bubbleStop();
+  field.innerHTML='';
+  if(!items || !items.length){ field.classList.add('hidden'); return; }
+  field.classList.remove('hidden');
+
+  const maxFused=Math.max(...items.map(x=>Number(x.fused)||0), 0.0001);
+  const list=items.map((x,i)=>{
+    const ratio=Math.max(0, Math.min(1, (Number(x.fused)||0)/maxFused));
+    const size=Math.round(62 + ratio*74);
+    const hue=Math.floor(Math.random()*360);
+    const el=document.createElement('div');
+    el.className='bubble';
+    el.style.width=el.style.height=size+'px';
+    el.style.background='radial-gradient(circle at 32% 28%, hsl('+hue+' 92% 92%), hsl('+((hue+38)%360)+' 78% 76%))';
+    el.style.color='hsl('+hue+' 62% 26%)';
+    el.title=(x.entity||'')+' — 点击跳转到该结果 / click to jump';
+    el.innerHTML='<span>'+escapeHtml(String(x.entity||('#'+(i+1))))+'<span class="bub-pct">'+Math.round(ratio*100)+'%</span></span>';
+    el.onclick=function(){ jumpToResult(i); };
+    field.appendChild(el);
+    const b={
+      el:el, size:size,
+      x:Math.random()*Math.max(1, (field.clientWidth||900)-size),
+      y:Math.random()*Math.max(1, (field.clientHeight||236)-size),
+      vx:(Math.random()-0.5)*0.55 || 0.25,
+      vy:(Math.random()-0.5)*0.55 || 0.2,
+      scale:0.15, hovered:false
+    };
+    el.addEventListener('mouseenter',function(){ b.hovered=true; });
+    el.addEventListener('mouseleave',function(){ b.hovered=false; });
+    return b;
+  });
+
+  const hint=document.createElement('div');
+  hint.className='bubble-dot';
+  hint.textContent='气泡大小 = 相关性 · 悬停停止并放大 · 点击跳转到下方对应结果';
+  field.appendChild(hint);
+
+  const state={list:list, raf:0};
+  bubbleState=state;
+  const step=function(){
+    const cw=field.clientWidth||900, ch=field.clientHeight||236;
+    state.list.forEach(function(b){
+      if(!b.hovered){
+        b.x+=b.vx; b.y+=b.vy;
+        if(b.x<0){ b.x=0; b.vx=Math.abs(b.vx); }
+        if(b.y<0){ b.y=0; b.vy=Math.abs(b.vy); }
+        if(b.x>cw-b.size){ b.x=cw-b.size; b.vx=-Math.abs(b.vx); }
+        if(b.y>ch-b.size){ b.y=ch-b.size; b.vy=-Math.abs(b.vy); }
+      }
+      b.scale+=((b.hovered?1.1:1)-b.scale)*0.18;
+      b.el.style.transform='translate3d('+b.x.toFixed(1)+'px,'+b.y.toFixed(1)+'px,0) scale('+b.scale.toFixed(3)+')';
+      b.el.style.zIndex=b.hovered?6:2;
+    });
+    state.raf=requestAnimationFrame(step);
+  };
+  state.raf=requestAnimationFrame(step);
+}
+function jumpToResult(i){
+  const card=document.querySelector('#searchResult .card[data-idx="'+i+'"]');
+  if(!card) return;
+  document.querySelectorAll('#searchResult .card').forEach(function(c){ c.classList.remove('active'); });
+  card.classList.add('active');
+  card.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
 async function doSearch(){
   const query=document.getElementById("query").value.trim();
   if(!query){ alert("Please enter a query / 请输入检索内容"); return; }
@@ -362,7 +446,8 @@ async function doSearch(){
     const j=await r.json();
     currentResults=j.results||[];
     const freeFns=j.free_functions||[];
-    if(!currentResults.length && !freeFns.length){ box.innerHTML="<i class='meta'>No results / 无结果</i>"; return; }
+    if(!currentResults.length && !freeFns.length){ box.innerHTML="<i class='meta'>No results / 无结果</i>"; renderBubbles([]); return; }
+    renderBubbles(currentResults);
     box.innerHTML="";
     currentResults.forEach((x,i)=>{
       const el=document.createElement("div");
@@ -471,17 +556,12 @@ function buildOverview(x, methods){
 }
 
 function showDetail(x){
-  const previousItem = selectedItem;
-  const changedSelection = !previousItem || previousItem !== x;
+  const key=`${x.entity||''}|${x.path||''}|${x.lines||''}`;
+  const changed=(key!==selectedKey);
+  selectedKey=key;
   selectedItem=x;
-  // 与 Learn V3 面板联动：选中算法变化时重置答案并刷新当前激活 tab（Complexity/Quiz）
-  if (changedSelection) quizAnswersOpen = {};
-  const activeLearnTab = document.querySelector('#learnTabs .tab.active');
-  if (activeLearnTab) {
-    const activeIndex = Array.from(document.querySelectorAll('#learnTabs .tab')).indexOf(activeLearnTab);
-    if (activeIndex === 6) renderQuiz();
-    if (activeIndex === 5) renderComplexity();
-  }
+  // 换算法时收起上一次的答题状态，避免答案跨算法残留
+  if(changed) quizAnswersOpen={};
   const d=document.getElementById("detail"); const e=document.getElementById("detailEmpty");
   e.classList.add("hidden"); d.classList.remove("hidden");
   const methods=toList(x.math_methods);
@@ -508,21 +588,38 @@ function showDetail(x){
         `<div class="learn-section"><h4>Reference Edges / 引用关系</h4>${edges}</div>` +
         `<div class="learn-section"><h4>Source Code / 源码</h4><pre id="codeBlock">${escapeHtml(x.code || "(no source / 无源码)")}</pre></div>`;
   if(window.renderMathInElement){ renderMathInElement(d,{delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}]}); }
+  if(changed) refreshLearnPanel();
 }
 function copyCode(){ const c=document.getElementById('codeBlock'); if(c){ navigator.clipboard.writeText(c.innerText).then(()=>alert('Copied to clipboard / 已复制到剪贴板')); } }
 function scrollToLearnBox(){ const title=document.getElementById('learnTitle'); if(title) title.scrollIntoView({behavior:'smooth',block:'start'}); }
 
+const LEARN_TABS=['math','path','rec','graph','compare','complexity','quiz'];
+
 function showLearnTab(name){
-  const tabs=['math','path','rec','graph','compare','complexity','quiz'];
-  if(!tabs.includes(name)) return;
-  tabs.forEach(id=>document.getElementById('learn'+cap(id)).classList.add('hidden'));
+  if(!LEARN_TABS.includes(name)) return;   // 未知标签名直接忽略（origin/main 的守卫，保留）
+  currentLearnTab=name;
+  LEARN_TABS.forEach(id=>document.getElementById('learn'+cap(id)).classList.add('hidden'));
   document.getElementById('learn'+cap(name)).classList.remove('hidden');
-  document.querySelectorAll('#learnTabs .tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===name));
+  document.querySelectorAll('#learnTabs .tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  renderLearnPanel(name);
+}
+
+// 按标签名渲染对应面板；math 由 showDetail 负责、compare 由 compareItems 驱动，均不在此重复渲染。
+// 未选中对象时各面板自行给出空状态提示。
+function renderLearnPanel(name){
   if(name==='path') renderPath();
-  if(name==='rec') renderRec();
-  if(name==='graph') renderGraph();
-  if(name==='complexity') renderComplexity();
-  if(name==='quiz') renderQuiz();
+  else if(name==='rec') renderRec();
+  else if(name==='graph') renderGraph();
+  else if(name==='complexity') renderComplexity();
+  else if(name==='quiz') renderQuiz();
+}
+
+// 选中对象变化时调用：只重取当前可见的 Learn 标签，避免内容停留在上一个算法。
+function refreshLearnPanel(){
+  if(currentLearnTab==='math') return;
+  pathOpenNode=-1;
+  window.__pathData=null;
+  renderLearnPanel(currentLearnTab);
 }
 function cap(s){ return s[0].toUpperCase()+s.slice(1); }
 
@@ -597,69 +694,73 @@ function renderCompare(){
     </div>`;
 }
 
-// Path V2: curated concept dependencies. This is a learning guide, not a parsed call graph.
-const PATH_KNOWLEDGE={
-  algebra:{title:'线性代数 / Linear algebra',why:'理解向量、矩阵乘法以及线性层中的权重与输入。',example:'线性层：y = Wx + b。',check:'为什么权重矩阵的形状必须与输入维度匹配？'},
-  calculus:{title:'微积分与梯度 / Calculus & gradients',why:'理解导数、链式法则以及梯度如何用于参数更新。',example:'梯度下降：θ ← θ − η∇L(θ)。',check:'链式法则如何帮助计算多层网络的梯度？'},
-  probability:{title:'概率基础 / Probability',why:'理解随机变量、条件概率与概率分布。',example:'条件概率 P(y|x) 表示给定 x 时 y 的分布。',check:'概率密度与离散概率有什么区别？'},
-  optimization:{title:'损失函数与优化 / Loss & optimization',why:'理解训练目标、正则化与最小化损失。',example:'最小化 L(θ)；正则项可以约束参数。',check:'为什么训练损失下降不一定意味着泛化能力提升？'},
-  neural:{title:'神经网络与激活函数 / Neural networks',why:'理解全连接层、非线性激活及前向传播。',example:'h = ReLU(Wx+b)。',check:'如果网络中没有非线性激活，多层线性层会怎样？'},
-  sigmoid:{title:'Sigmoid / S 型激活',why:'将实数映射到 0 与 1 之间；具体含义取决于模型输出。',example:'σ(x)=1/(1+e^(−x))。',check:'Sigmoid 的输出范围是什么？'},
-  relu:{title:'ReLU / 修正线性单元',why:'理解神经网络中常见的分段线性激活。',example:'ReLU(x)=max(0,x)。',check:'当输入小于零时，ReLU 输出是多少？'},
-  latent:{title:'潜在变量 / Latent variables',why:'理解观测数据背后的隐变量以及编码器与解码器。',example:'生成模型通常通过潜在变量 z 描述数据生成过程。',check:'潜在变量与观测变量有什么不同？'},
-  vae:{title:'变分自编码器 / VAE',why:'连接编码器、潜在分布、解码器与变分目标。',example:'常见目标包含重建项与 KL 散度项。',check:'VAE 的编码器与解码器分别负责什么？'},
-  likelihood:{title:'似然与对数似然 / Likelihood',why:'理解给定参数时观测数据的概率模型及其对数形式。',example:'负对数似然：NLL(θ)=−Σ log p(yᵢ|xᵢ,θ)。',check:'为什么常将似然的乘积转化为对数之和？'},
-  logistic:{title:'逻辑回归 / Logistic regression',why:'理解线性得分如何经 Sigmoid 映射为二分类概率。',example:'p(y=1|x)=σ(wᵀx+b)。',check:'逻辑回归为什么通常用于分类？'},
-  regularization:{title:'正则化 / Regularization',why:'理解在目标函数中约束模型复杂度的方式。',example:'L(θ)+λ‖θ‖²。',check:'正则化系数增大可能带来什么影响？'},
-  evaluation:{title:'验证与评估 / Evaluation',why:'使用独立数据评估模型并识别过拟合。',example:'区分训练集、验证集和测试集。',check:'为什么不能用测试集反复调参？'},
-  implementation:{title:'源码实现 / Source implementation',why:'回到当前搜索结果，结合代码核对函数签名、调用和实际实现。',example:'阅读当前函数源码并对照前面的概念。',check:'当前函数负责训练、损失计算还是网络构建？'}
-};
-function pathPlan(item){
-  const name=String(item.entity||'').toLowerCase();
-  const module=String(item.module||item.path||'').toLowerCase();
-  const cues=toList(item.math_methods).map(v=>String(v).toLowerCase());
-  const text=[name,module,...cues].join(' ');
-  let ids=['algebra','calculus','probability','optimization'];
-  let basis='通用基础路径 / General foundation';
-  if(/vae|variational|latent/.test(text)){
-    ids=['algebra','calculus','probability','neural','relu','sigmoid','latent','vae'];
-    basis='VAE 相关学习路径 / VAE-related learning path';
-  }else if(/logistic|_nll|likelihood|log likelihood/.test(text)){
-    ids=['algebra','probability','sigmoid','likelihood','logistic','optimization','regularization'];
-    basis='逻辑回归与似然 / Logistic regression & likelihood';
-  }else if(/neural|mlp|relu|softmax|sigmoid/.test(text)){
-    ids=['algebra','calculus','optimization','neural'];
-    if(/relu/.test(text))ids.push('relu');
-    if(/sigmoid/.test(text))ids.push('sigmoid');
-    basis='神经网络相关路径 / Neural-network learning path';
-  }else if(/linear|regression|ridge|lasso/.test(text)){
-    ids=['algebra','calculus','optimization','regularization','evaluation'];
-    basis='回归相关学习路径 / Regression learning path';
-  }
-  return {ids:[...new Set([...ids,'implementation'])],basis};
-}
+// Path: 由后端 /api/learn/path 依据索引元数据自动生成（数学前置 → 模块定位 → 同模块对照 → 目标算法）。
 let pathOpenNode=-1;
-function togglePathNode(i){pathOpenNode=pathOpenNode===i?-1:i;renderPath();}
+let pathRequestToken=0;
+window.__pathData=null;
+
+function togglePathNode(i){ pathOpenNode = (pathOpenNode===i ? -1 : i); renderPathContent(); }
 function pathToSource(){
   showLearnTab('math');
   document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'start'});
 }
-function renderPath(){
+
+function renderPathContent(){
   const box=document.getElementById('pathTree');
-  if(!selectedItem){box.innerHTML='<div class="placeholder">先在 Algorithm Search 中点击一个搜索结果，再打开 Path / Select a search result first.</div>';return;}
-  const plan=pathPlan(selectedItem);
-  const safeName=escapeHtml(String(selectedItem.entity||'未命名函数'));
-  box.innerHTML=`<div class="learn-section"><h4>当前学习目标 / Selected source: ${safeName}</h4>
-    <div class="meta">${escapeHtml(String(selectedItem.path||selectedItem.module||'—'))}</div>
-    <div class="path-status">${plan.basis} · ${plan.ids.length} 个节点。此路径由预设知识依赖和检索关键词生成，并非对源码依赖的自动证明。 / Curated learning guide, not a verified source dependency graph.</div>
-    <div class="path-actions"><button class="small-btn ghost" onclick="pathToSource()">查看当前源码 / View source</button></div></div>`+
-    plan.ids.map((id,i)=>{
-      const k=PATH_KNOWLEDGE[id],open=pathOpenNode===i;
-      return `<div class="path-step"><div class="path-number">${i+1}</div><div>
-      <button type="button" class="path-node" aria-expanded="${open}" onclick="togglePathNode(${i})"><b>${escapeHtml(k.title)}</b> <span class="meta">${open?'▲ 收起':'▼ 展开解释'}</span></button>
-      ${open?`<div class="path-detail"><p><b>学习目标：</b>${escapeHtml(k.why)}</p><p><b>示例：</b>${escapeHtml(k.example)}</p><p><b>自测：</b>${escapeHtml(k.check)}</p>${id==='implementation'?'<button class="small-btn ghost" onclick="pathToSource()">打开 Math Card 源码 / Open source</button>':''}</div>`:''}</div></div>`;
-    }).join('');
+  const d=window.__pathData;
+  if(!d){
+    box.className='tree placeholder';
+    box.innerHTML='先在 Algorithm Search 中点击一个搜索结果，再打开 Path / Select a search result first.';
+    return;
+  }
+  box.className='';
+  const src=d.source||{};
+  const head=`<div class="learn-section"><h4>当前学习目标 / Selected source: ${escapeHtml(String(d.algorithm||'—'))}</h4>
+    <div class="meta">${escapeHtml(String(src.path||d.module||'—'))}${src.lines?':'+escapeHtml(String(src.lines)):''}</div>
+    <div class="path-status">${escapeHtml(String(d.note||''))}</div>
+    <div class="path-actions"><button class="small-btn ghost" onclick="pathToSource()">查看当前源码 / View source</button></div></div>`;
+  const steps=d.steps||[];
+  if(!steps.length){
+    box.innerHTML=head+'<div class="placeholder">未能为该算法生成学习路径。 / No path could be generated for this algorithm.</div>';
+    return;
+  }
+  box.innerHTML=head+steps.map((s,i)=>{
+    const open=pathOpenNode===i;
+    const items=(s.items||[]).map(it=>`<li><b>${escapeHtml(String(it.name||''))}</b>${it.note?` <span class="meta">${escapeHtml(String(it.note))}</span>`:''}</li>`).join('');
+    const isTarget=s.kind==='target';
+    return `<div class="path-step"><div class="path-number">${escapeHtml(String(s.step||i+1))}</div><div>
+      <button type="button" class="path-node" aria-expanded="${open}" onclick="togglePathNode(${i})"><b>${escapeHtml(String(s.title||''))}</b> <span class="meta">${open?'▲ 收起':'▼ 展开讲解'}</span></button>
+      ${open?`<div class="path-detail"><p>${escapeHtml(String(s.detail||''))}</p>${items?`<ul style="margin:8px 0 0;padding-left:18px">${items}</ul>`:''}${isTarget?'<p style="margin:10px 0 0"><button class="small-btn ghost" onclick="pathToSource()">打开 Math Card 源码 / Open source</button></p>':''}</div>`:''}</div></div>`;
+  }).join('');
 }
+
+async function renderPath(){
+  const box=document.getElementById('pathTree');
+  if(!selectedItem){
+    window.__pathData=null;
+    renderPathContent();
+    return;
+  }
+  const token=++pathRequestToken;
+  box.className='';
+  box.innerHTML='<div class="placeholder">正在根据索引元数据生成学习路径… / Building learning path from indexed metadata…</div>';
+  try{
+    const q=new URLSearchParams({module:selectedItem.module||selectedItem.path||'',algorithm:selectedItem.entity||''});
+    const r=await fetch(BASE+'/api/learn/path?'+q.toString());
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(token!==pathRequestToken) return;
+    window.__pathData=j;
+    pathOpenNode=0;
+    renderPathContent();
+  }catch(e){
+    if(token!==pathRequestToken) return;
+    window.__pathData=null;
+    box.className='';
+    box.innerHTML=`<div class="placeholder">学习路径生成失败 / Path generation failed：${escapeHtml(String(e.message||e))}</div>`;
+  }
+}
+
 let recRequestToken=0;
 function recMethods(x){ return compareMethods(x).map(v=>String(v).toLowerCase()); }
 function recIdentity(x){ return `${x.entity||''}|${x.path||''}|${x.lines||''}`; }

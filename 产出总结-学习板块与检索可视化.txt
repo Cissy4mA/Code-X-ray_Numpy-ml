@@ -1,0 +1,104 @@
+学习板块与检索可视化（feat/learn-v4）产出总结
+================================================
+仓库：Cissy4mA/Code-X-ray_Numpy-ml
+分支：feat/learn-v4  ->  目标分支 main
+用途：PR 说明 / 分工交付说明（分工 2-2 学习板块、3-2 后端结果可视化）
+
+1. 改动范围
+------------------------------------------------
+本分支相对 main 共改动 3 个文件，+396 / -80 行：
+
+  backend/learn.py        +221 / -13    学习路径后端重写
+  frontend/index.html     +251 / -66    气泡可视化、面板联动、交互修复
+  backend/app.py          +4   / -2     Path 接口增加 algorithm 查询参数
+
+关键文件当前规模：
+  backend/learn.py                     435 行
+  frontend/index.html                  973 行
+  backend/app.py                       245 行
+
+2. 学习路径（Path）改为后端自动生成
+------------------------------------------------
+接口：GET /api/learn/path?module={模块}&algorithm={算法}
+
+之前前端用一张写死的表格（PATH_KNOWLEDGE / pathPlan）拼路径，换算法不会变。
+现在整条路径由索引库元数据推导，换一个算法，四步的标题、依据与条目都会随之变化。
+
+四步结构：
+  步骤 1  数学前置      由算法标注的 math_methods 归并到所属基础学科（线性代数、概率统计、优化、信号处理等）
+  步骤 2  模块定位      给出模块名、算法族、任务类型、模块内算法数量，以及源码文件与行号
+  步骤 3  同模块横向对照 列出同模块其余算法及其行号区间，先横向扫一遍该族方法在解决什么
+  步骤 4  目标算法精读   给出目标源码行号区间、源码行数、关键参数、数学方法、复杂度参考值
+
+数据来源（全部来自索引库，无人工写死）：
+  algorithms 表的 math_methods / complexity / start_line / end_line
+  modules 表的 family / description
+  code_files 表的 path
+  源码签名解析出的参数名（_signature_params / _merge_params）
+
+新增/改写的内部函数：
+  learning_path()      主入口，装配四步结构
+  _fetch_target()      按 module+algorithm 定位目标算法
+  _foundation_groups() 把 math_methods 归并成基础学科分组
+  _merge_params()      合并索引里的参数与源码签名解析出的参数
+  _signature_params()  从源码片段解析函数签名参数
+  _first_sentence()    截取模块描述的第一句
+  _json_list()         容错解析 JSON 字段
+
+说明：路径是「阅读顺序建议」，不是源码依赖关系的证明，接口返回的 note 字段已注明。
+
+3. 检索结果气泡可视化
+------------------------------------------------
+位置：搜索按钮下方的气泡区（#bubbleField），仅在检索板块展示。
+
+  renderBubbles()  按检索结果生成气泡
+  jumpToResult()   点击气泡跳到对应结果卡片
+
+半径映射：62 + 相似度比例 * 74，即 62–136 px，相关度越高气泡越大。
+颜色：每个气泡取随机 HSL 色调，仅用于区分为不同个体，不表示相似度。
+动画：requestAnimationFrame 驱动漂浮，带边界反弹与气泡间碰撞避让；
+      bubbleStop() 在重新渲染前取消上一轮动画帧，避免动画叠加。
+交互：悬停加高亮描边，气泡内显示名称与相似度百分比。
+
+4. 交互修复
+------------------------------------------------
+问题：在 Path 面板切换选中的学习目标（换算法）后，Path 面板不刷新，
+      必须先去点一下数学卡片才会更新。
+
+原因：showDetail 只负责渲染详情，从未通知 Learn 面板重新取数。
+
+修复：
+  新增 selectedKey    记录当前选中对象身份，用于判断是否需要重新取数
+  新增 currentLearnTab 记录当前 Learn 标签，选中对象变化时据此刷新对应面板
+  新增 refreshLearnPanel() 在选中对象变化时重新请求并渲染 Path / Complexity / Quiz
+  同时修复 Complexity / Quiz 面板的隐藏与 data-tab 高亮状态
+
+验证：用 jsdom 对照测试（前后端渲染逻辑复刻），改前 9 项断言失败，改后全部通过。
+
+5. 合并情况
+------------------------------------------------
+origin/main 最新为 af86c3e（含 Asa-67 的 PR#4：Learn V3 复杂度分析 + 理解测试，
+以及 showDetail 选中算法联动面板、showLearnTab 守卫）。
+该提交已合入 feat/learn-v4（merge commit 2932617），冲突按如下方式处理：
+  保留本分支「后端自动生成 Path」与 selectedKey 判重逻辑
+  吸收 main 的 showLearnTab 未知标签守卫
+本分支与 origin/main 之间已无待合并内容，PR 可干净合并。
+
+6. 接口清单（学习板块）
+------------------------------------------------
+GET /api/learn/modules?           模块列表
+GET /api/learn/card?module=&algorithm=  算法知识卡片
+GET /api/learn/compare?module=    同模块算法对比
+GET /api/learn/path?module=&algorithm=  自动生成学习路径（本次新增 algorithm 参数）
+GET /api/learn/call_graph?module=&entity=&path=  调用关系图
+
+7. 本地验证方式
+------------------------------------------------
+后端：uvicorn backend.app:app --port 8000
+前端：FastAPI 同源静态托管，浏览器打开 http://127.0.0.1:8000/
+注意：数据库为 MySQL/MariaDB，需保证 3306 端口由 MariaDB 占用（官方 MySQL 8.0 服务已改为手动启动）。
+
+8. 已知限制
+------------------------------------------------
+路径基于索引元数据生成，未做源码级依赖分析，可能给出偏保守的阅读顺序。
+气泡半径上限受容器高度（236px）约束，结果条数很多时会自动缩小并拥挤，属预期表现。
