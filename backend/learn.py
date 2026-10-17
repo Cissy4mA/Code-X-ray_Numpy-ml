@@ -145,11 +145,29 @@ def learning_path(module=None, algorithm=None):
         },
     ]
 
+    roadmap = [{
+        "name": target["name"],
+        "path": target["path"],
+        "lines": f"{target['start_line']}-{target['end_line']}",
+        "math_methods": methods[:3],
+        "complexity": target.get("complexity"),
+        "is_target": True,
+    }] + [{
+        "name": s["name"],
+        "path": s["path"],
+        "lines": s["lines"],
+        "math_methods": s["math_methods"],
+        "complexity": s["complexity"],
+        "is_target": False,
+    } for s in siblings]
+
     return {
         "module": mod,
         "algorithm": target["name"],
         "steps": steps,
         "source": {"path": target["path"], "lines": f"{target['start_line']}-{target['end_line']}"},
+        "module_size": mod_size,
+        "roadmap": sorted(roadmap, key=lambda r: r["name"]),   # 模块内全部算法，供前端画路线图与统计进度
         "note": ("Path is generated from indexed metadata (math methods, module membership, "
                  "sibling algorithms, source size). It is a reading order, not a verified dependency proof. / "
                  "路径由索引元数据自动生成，是阅读顺序建议，不是源码依赖关系的证明。"),

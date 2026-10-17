@@ -19,6 +19,10 @@
  button:disabled{opacity:.5;cursor:not-allowed}
  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
  .row>div{flex:1;min-width:140px}
+ .row.search-controls{display:grid;grid-template-columns:1.2fr 1.6fr 1fr 1fr;gap:12px;align-items:end}
+ .row.search-controls>div{flex:none;min-width:0;max-width:none}
+ .row.search-controls input,.row.search-controls select,.row.search-controls button{width:100%;margin-top:0}
+ @media(max-width:700px){.row.search-controls{grid-template-columns:1fr 1fr}}
  .card{border:1px solid #e1e4e8;border-radius:8px;padding:12px;margin-top:10px;cursor:pointer;transition:.15s}
  .card:hover{border-color:#2563eb;background:#f8faff}
  .card.active{border-color:#2563eb;background:#eef4ff}
@@ -81,6 +85,36 @@
  .path-status{font-size:12px;color:#64748b;margin-top:6px}
  .path-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
  .path-actions button{margin:0}
+ /* Path: 清单进度条 + 模块路线图 + 步骤已读状态 */
+ .path-progress{display:flex;align-items:center;gap:10px;margin:10px 0 4px}
+ .path-progress .bar{flex:1;height:8px;border-radius:99px;background:#eef2f6;overflow:hidden}
+ .path-progress .bar i{display:block;height:100%;width:0;background:#2da44e;transition:width .25s ease}
+ .path-progress b{font-size:13px;font-variant-numeric:tabular-nums}
+ .road-list{display:flex;flex-direction:column;gap:2px;margin-top:8px}
+ .road-item{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:8px;cursor:pointer}
+ .road-item:hover{background:#f6f8fa}
+ .road-item.active{background:#eff6ff;box-shadow:inset 0 0 0 1px #bfdbfe}
+ .road-item.done{background:#f0fbf4;box-shadow:inset 0 0 0 1px #aceebb}
+ .road-item.done .road-name{color:#0f5323}
+ .road-item.done.active{background:#e9f9ef;box-shadow:inset 0 0 0 1px #7fd39b}
+ .road-dot{width:20px;height:20px;border-radius:50%;border:1.5px solid #cbd5e1;background:#fff;flex:0 0 auto;
+   margin-top:2px;display:grid;place-items:center;font-size:11px;font-weight:600;color:#64748b;position:relative}
+ .road-item.partial .road-dot::after{content:"";position:absolute;inset:-1.5px;border-radius:50%;
+   background:conic-gradient(#2da44e var(--p,0%),#e2e8f0 0);
+   -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 3px));
+   mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 3px))}
+ .road-item.done .road-dot{background:#2da44e;border-color:#2da44e;color:#fff}
+ .road-body{min-width:0}
+ .road-name{font-size:13px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .road-meta{font-size:11px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .path-step.read .path-number{background:#dcfce7;color:#15803d}
+ .path-step.read .path-node{border-color:#aceebb;background:#f0fbf4}
+ .path-step.read .path-node:hover,.path-step.read .path-node[aria-expanded="true"]{border-color:#2da44e;background:#e9f9ef}
+ .path-step-bar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0}
+ .read-toggle.on{background:#dcfce7;border-color:#aceebb;color:#15803d}
+ .learn-section.done{background:#f6fdf8;border-color:#aceebb}
+ .path-done-banner{display:flex;align-items:center;gap:8px;background:#e9f9ef;border:1px solid #aceebb;color:#0f5323;
+   border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;margin:10px 0}
  .graph-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}
  .graph-stat{border:1px solid #dbeafe;background:#f8fbff;border-radius:8px;padding:10px;text-align:center}
  .graph-stat b{display:block;font-size:18px;color:#2563eb}
@@ -178,13 +212,13 @@
 <!-- 3.2 Algorithm Search / 算法搜索 -->
 <h3 id="sec32">3.2 Algorithm Search / 算法搜索</h3>
 <p class="meta">Search returns top-k <b>algorithm classes / 算法分类</b> (a complete algorithm). Each class card lists all its member functions on the right. / 返回前 k 个完整算法分类，每张卡片右侧列出该分类下的全部成员函数。</p>
-<div class="row">
-  <div style="max-width:180px"><label class="meta">Module / 模块</label><select id="fModule">
+<div class="row search-controls">
+  <div><label class="meta">Module / 模块</label><select id="fModule">
     <option value="">All / 全部</option>
   </select></div>
-  <div style="flex:1"><label class="meta">Query / 查询</label><input type="text" id="query" placeholder="e.g. which algorithm estimates params via EM / 用 EM 估参数的算法"></div>
-  <div style="max-width:90px"><label class="meta">Top-K (1-10)</label><input type="number" id="topk" value="3" min="1" max="10"></div>
-  <div style="max-width:120px"><button onclick="doSearch()" data-page-node-id="x5">Search / 检索</button></div>
+  <div><label class="meta">Query / 查询</label><input type="text" id="query" placeholder="e.g. which algorithm estimates params via EM / 用 EM 估参数的算法"></div>
+  <div><label class="meta">Top-K (1-10)</label><input type="number" id="topk" value="3" min="1" max="10"></div>
+  <div><button onclick="doSearch()" data-page-node-id="x5">Search / 检索</button></div>
 </div>
 <div id="bubbleField" class="bubble-field hidden"></div>
 <div id="searchResult" data-page-node-id="x6" style="margin-top:10px"></div>
@@ -370,6 +404,10 @@ function renderBubbles(items){
   if(!items || !items.length){ field.classList.add('hidden'); return; }
   field.classList.remove('hidden');
 
+  const HOVER=1.1;   // 悬停放大倍数；碰撞半径按放大后的尺寸预留，悬停时也不会压到邻居
+  const GAP=2;       // 气泡之间的最小视觉间隙
+  const HINT=18;     // 底部留给说明文字的条带高度
+
   const maxFused=Math.max(...items.map(x=>Number(x.fused)||0), 0.0001);
   const list=items.map((x,i)=>{
     const ratio=Math.max(0, Math.min(1, (Number(x.fused)||0)/maxFused));
@@ -387,7 +425,7 @@ function renderBubbles(items){
     const b={
       el:el, size:size,
       x:Math.random()*Math.max(1, (field.clientWidth||900)-size),
-      y:Math.random()*Math.max(1, (field.clientHeight||236)-size),
+      y:Math.random()*Math.max(1, (field.clientHeight||236)-HINT-size),
       vx:(Math.random()-0.5)*0.55 || 0.25,
       vy:(Math.random()-0.5)*0.55 || 0.2,
       scale:0.15, hovered:false
@@ -404,17 +442,58 @@ function renderBubbles(items){
 
   const state={list:list, raf:0};
   bubbleState=state;
+
+  // 两两分离：把重叠的气泡沿圆心连线推开，并交换沿法线的速度分量，
+  // 于是气泡之间只会反弹、不会互相遮盖。悬停中的气泡视为不动，让邻居让位。
+  const separate=function(cw, floor){
+    const L=state.list, n=L.length;
+    for(let pass=0; pass<2; pass++){          // 每帧跑两遍，初始高度重叠时也能很快散开
+    for(let i=0;i<n;i++){
+      const a=L[i], ra=(a.size/2)*HOVER;
+      for(let j=i+1;j<n;j++){
+        const b=L[j], rb=(b.size/2)*HOVER;
+        let dx=(b.x+b.size/2)-(a.x+a.size/2);
+        let dy=(b.y+b.size/2)-(a.y+a.size/2);
+        let d=Math.sqrt(dx*dx+dy*dy);
+        const minD=ra+rb+GAP;
+        if(d>=minD) continue;
+        if(d<0.01){ dx=Math.random()-0.5; dy=Math.random()-0.5; d=Math.sqrt(dx*dx+dy*dy)||1; }
+        const nx=dx/d, ny=dy/d, need=minD-d;
+        const wa=a.hovered?0:(b.hovered?1:0.5);
+        a.x-=nx*need*wa; a.y-=ny*need*wa;
+        b.x+=nx*need*(1-wa); b.y+=ny*need*(1-wa);
+        const va=a.vx*nx+a.vy*ny, vb=b.vx*nx+b.vy*ny;
+        if(va-vb>0){                      // 只在对向靠近时反弹，分开后不再来回抖
+          a.vx-=(va-vb)*nx; a.vy-=(va-vb)*ny;
+          b.vx+=(va-vb)*nx; b.vy+=(va-vb)*ny;
+        }
+      }
+    }
+    }
+    L.forEach(function(b){                // 分离后重新贴回容器边界
+      if(b.x<0){ b.x=0; b.vx=Math.abs(b.vx); }
+      if(b.y<0){ b.y=0; b.vy=Math.abs(b.vy); }
+      if(b.x>cw-b.size){ b.x=cw-b.size; b.vx=-Math.abs(b.vx); }
+      const ymax=Math.max(0, floor-b.size);
+      if(b.y>ymax){ b.y=ymax; b.vy=-Math.abs(b.vy); }
+    });
+  };
+
   const step=function(){
     const cw=field.clientWidth||900, ch=field.clientHeight||236;
+    const floor=Math.max(80, ch-HINT);
     state.list.forEach(function(b){
       if(!b.hovered){
         b.x+=b.vx; b.y+=b.vy;
         if(b.x<0){ b.x=0; b.vx=Math.abs(b.vx); }
         if(b.y<0){ b.y=0; b.vy=Math.abs(b.vy); }
         if(b.x>cw-b.size){ b.x=cw-b.size; b.vx=-Math.abs(b.vx); }
-        if(b.y>ch-b.size){ b.y=ch-b.size; b.vy=-Math.abs(b.vy); }
+        if(b.y>floor-b.size){ b.y=Math.max(0, floor-b.size); b.vy=-Math.abs(b.vy); }
       }
-      b.scale+=((b.hovered?1.1:1)-b.scale)*0.18;
+      b.scale+=((b.hovered?HOVER:1)-b.scale)*0.18;
+    });
+    separate(cw, floor);
+    state.list.forEach(function(b){
       b.el.style.transform='translate3d('+b.x.toFixed(1)+'px,'+b.y.toFixed(1)+'px,0) scale('+b.scale.toFixed(3)+')';
       b.el.style.zIndex=b.hovered?6:2;
     });
@@ -695,14 +774,120 @@ function renderCompare(){
 }
 
 // Path: 由后端 /api/learn/path 依据索引元数据自动生成（数学前置 → 模块定位 → 同模块对照 → 目标算法）。
+// 进度模型：每步一个「已读」标记，四步全部已读才算该算法完成；完成后节点与卡片变色。
+// 进度存在 localStorage，换标签页、刷新页面都不丢。
+const LEARN_PROGRESS_KEY='xcx-learn-progress-v1';
 let pathOpenNode=-1;
 let pathRequestToken=0;
 window.__pathData=null;
+let learnProgress={};
+
+function progressKey(entity, path){ return String(entity||'')+'|'+String(path||''); }
+function loadLearnProgress(){
+  try{
+    const raw=localStorage.getItem(LEARN_PROGRESS_KEY);
+    const parsed=raw?JSON.parse(raw):null;
+    learnProgress=(parsed&&parsed.progress)?parsed.progress:{};
+  }catch(e){ learnProgress={}; }
+}
+function saveLearnProgress(){
+  try{ localStorage.setItem(LEARN_PROGRESS_KEY, JSON.stringify({progress:learnProgress})); }catch(e){}
+}
+function pathSteps(){ const d=window.__pathData; return (d&&d.steps)?d.steps:[]; }
+function pathTarget(){ 
+  const d=window.__pathData; if(!d) return {key:'',count:0};
+  return {key:progressKey(d.algorithm, (d.source||{}).path), count:pathSteps().length};
+}
+// 取（必要时初始化）某算法的进度条目；steps 数量变化时按新长度重建，历史上已读的下标保留。
+function progressEntry(key, count){
+  if(!key||!count) return {read:[]};
+  let e=learnProgress[key];
+  if(!e||!Array.isArray(e.read)||e.read.length!==count){
+    const read=new Array(count).fill(false);
+    if(e&&Array.isArray(e.read)) for(let i=0;i<count;i++) read[i]=!!e.read[i];
+    e=learnProgress[key]={read:read};
+  }
+  return e;
+}
+function readCountOf(key, count){
+  const e=learnProgress[key];
+  if(!e||!Array.isArray(e.read)) return 0;
+  let n=0;
+  for(let i=0;i<count;i++) if(e.read[i]) n++;
+  return n;
+}
+function isAlgoComplete(key, count){ return count>0 && readCountOf(key,count)===count; }
 
 function togglePathNode(i){ pathOpenNode = (pathOpenNode===i ? -1 : i); renderPathContent(); }
 function pathToSource(){
   showLearnTab('math');
   document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function toggleStepRead(i){
+  const t=pathTarget();
+  if(!t.key) return;
+  const e=progressEntry(t.key, t.count);
+  e.read[i]=!e.read[i];
+  saveLearnProgress();
+  renderPathContent();
+}
+function resetPathProgress(){
+  const t=pathTarget();
+  if(!t.key) return;
+  learnProgress[t.key]={read:new Array(t.count).fill(false)};
+  saveLearnProgress();
+  renderPathContent();
+}
+// 路线图节点点击：按类名回查检索接口，取到完整元数据后交给 showDetail 统一切换选中对象。
+async function switchPathTarget(entity){
+  const d=window.__pathData;
+  const mod=(d&&d.module)||(selectedItem&&selectedItem.module)||'';
+  try{
+    const r=await fetch(BASE+'/api/search',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({query:String(entity||''),top_k:6,module:mod,family:'',task:''})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const rs=j.results||[];
+    const hit=rs.find(v=>String(v.entity)===String(entity)) || (rs.length?rs[0]:null);
+    if(!hit){ alert('未能在索引中定位该算法 / Could not locate this algorithm in the index.'); return; }
+    showDetail(hit);
+  }catch(e){
+    alert('切换学习目标失败 / Failed to switch target：'+String(e.message||e));
+  }
+}
+
+// 模块路线图：列出同模块全部算法，已完成的节点变色，未完成但读过一部分的显示进度环。
+function renderRoadmap(d, currentKey, count){
+  const list=d.roadmap||[];
+  if(!list.length || !count) return '';
+  const doneN=list.filter(r=>isAlgoComplete(progressKey(r.name,r.path), count)).length;
+  const rows=list.map((r,i)=>{
+    const k=progressKey(r.name,r.path);
+    const n=readCountOf(k,count);
+    const isDone=isAlgoComplete(k,count);
+    const cls=['road-item'];
+    if(isDone) cls.push('done'); else if(n>0) cls.push('partial');
+    if(k===currentKey) cls.push('active');
+    const p=Math.round(n/count*100);
+    const meta=[r.lines, (r.math_methods||[])[0]].filter(Boolean).join(' · ');
+    const hint=isDone?'已完成学习':(n?`已读 ${n}/${count} 步`:'尚未开始');
+    return `<div class="${cls.join(' ')}" style="--p:${p}%" title="${escapeHtml(hint)}" onclick="switchPathTarget('${escapeHtml(String(r.name||''))}')">
+      <div class="road-dot">${isDone?'✓':(i+1)}</div>
+      <div class="road-body">
+        <div class="road-name">${escapeHtml(String(r.name||''))}</div>
+        <div class="road-meta">${escapeHtml(meta)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  const total=list.length;
+  return `<div class="learn-section"><h4>模块路线图 / Module roadmap · ${escapeHtml(String(d.module||''))}</h4>
+    <div class="meta">该模块共 ${total} 个算法类，按类名排列。点击任一节点即可直接切换学习目标。</div>
+    <div class="path-progress">
+      <span class="meta">模块进度 / Module</span>
+      <div class="bar"><i style="width:${Math.round(doneN/total*100)}%"></i></div>
+      <b>${doneN}/${total}</b>
+    </div>
+    <div class="road-list">${rows}</div></div>`;
 }
 
 function renderPathContent(){
@@ -715,23 +900,36 @@ function renderPathContent(){
   }
   box.className='';
   const src=d.source||{};
-  const head=`<div class="learn-section"><h4>当前学习目标 / Selected source: ${escapeHtml(String(d.algorithm||'—'))}</h4>
-    <div class="meta">${escapeHtml(String(src.path||d.module||'—'))}${src.lines?':'+escapeHtml(String(src.lines)):''}</div>
-    <div class="path-status">${escapeHtml(String(d.note||''))}</div>
-    <div class="path-actions"><button class="small-btn ghost" onclick="pathToSource()">查看当前源码 / View source</button></div></div>`;
   const steps=d.steps||[];
+  const t=pathTarget();
+  const entry=progressEntry(t.key, t.count);   // 首次打开即建档，之后 saveLearnProgress 才有内容可写
+  const read=readCountOf(t.key, t.count);
+  const done=isAlgoComplete(t.key, t.count);
+  const pct=t.count?Math.round(read/t.count*100):0;
+  const head=`<div class="learn-section${done?' done':''}"><h4>当前学习目标 / Selected source: ${escapeHtml(String(d.algorithm||'—'))}</h4>
+    <div class="meta">${escapeHtml(String(src.path||d.module||'—'))}${src.lines?':'+escapeHtml(String(src.lines)):''}</div>
+    ${done?`<div class="path-done-banner">✓ 该算法已完成学习 · 四个步骤全部已读</div>`:''}
+    <div class="path-progress">
+      <span class="meta">清单进度 / Checklist</span>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <b>${read}/${t.count}</b>
+    </div>
+    <div class="path-status">${escapeHtml(String(d.note||''))}</div>
+    <div class="path-actions"><button class="small-btn ghost" onclick="pathToSource()">查看当前源码 / View source</button>${read?`<button class="small-btn ghost" onclick="resetPathProgress()">重置本算法进度 / Reset</button>`:''}</div></div>`;
   if(!steps.length){
     box.innerHTML=head+'<div class="placeholder">未能为该算法生成学习路径。 / No path could be generated for this algorithm.</div>';
     return;
   }
-  box.innerHTML=head+steps.map((s,i)=>{
+  const body=steps.map((s,i)=>{
     const open=pathOpenNode===i;
+    const isRead=!!entry.read[i];
     const items=(s.items||[]).map(it=>`<li><b>${escapeHtml(String(it.name||''))}</b>${it.note?` <span class="meta">${escapeHtml(String(it.note))}</span>`:''}</li>`).join('');
     const isTarget=s.kind==='target';
-    return `<div class="path-step"><div class="path-number">${escapeHtml(String(s.step||i+1))}</div><div>
+    return `<div class="path-step${isRead?' read':''}"><div class="path-number">${isRead?'✓':escapeHtml(String(s.step||i+1))}</div><div>
       <button type="button" class="path-node" aria-expanded="${open}" onclick="togglePathNode(${i})"><b>${escapeHtml(String(s.title||''))}</b> <span class="meta">${open?'▲ 收起':'▼ 展开讲解'}</span></button>
-      ${open?`<div class="path-detail"><p>${escapeHtml(String(s.detail||''))}</p>${items?`<ul style="margin:8px 0 0;padding-left:18px">${items}</ul>`:''}${isTarget?'<p style="margin:10px 0 0"><button class="small-btn ghost" onclick="pathToSource()">打开 Math Card 源码 / Open source</button></p>':''}</div>`:''}</div></div>`;
+      ${open?`<div class="path-detail"><p>${escapeHtml(String(s.detail||''))}</p>${items?`<ul style="margin:8px 0 0;padding-left:18px">${items}</ul>`:''}<div class="path-step-bar"><button type="button" class="small-btn ghost read-toggle${isRead?' on':''}" aria-pressed="${isRead}" onclick="toggleStepRead(${i})">${isRead?'✓ 已读 / Read':'标记已读 / Mark read'}</button>${isTarget?'<button class="small-btn ghost" onclick="pathToSource()">打开 Math Card 源码 / Open source</button>':''}</div></div>`:''}</div></div>`;
   }).join('');
+  box.innerHTML=head+renderRoadmap(d, t.key, t.count)+body;
 }
 
 async function renderPath(){
@@ -962,12 +1160,15 @@ function renderQuiz(){
   box.className='';
   box.innerHTML=`<div class="learn-section"><h4>Source-aware Quiz / 源码理解测试</h4>
     <div class="learn-note">Questions are generated from the currently selected repository metadata and visible source. They are for self-checking, not grading. / 题目根据当前仓库元数据和可见源码生成，用于自测，不用于评分。</div>
-    ${qs.map((it,i)=>`<div class="quiz-card"><div class="quiz-index">Q${i+1}</div><div><b>${escapeHtml(it.q)}</b><div style="margin-top:9px"><button class="small-btn ghost" onclick="toggleQuizAnswer(${i})">${quizAnswersOpen[i]?'Hide answer / 收起答案':'Show answer / 查看答案'}</button></div>${quizAnswersOpen[i]?`<div class="quiz-answer"><b>Answer / 答案：</b> ${escapeHtml(it.a)}<br><span class="meta">${escapeHtml(it.why)}</span></div>`:''}</div></div>`).join('')}
+    ${qs.map((it,i)=>`<div class="quiz-card"><div class="quiz-index">Q${i+1}</div><div><b>${escapeHtml(it.q)}</b><div style="margin-top:10px"><button type="button" class="path-node" aria-expanded="${quizAnswersOpen[i]?'true':'false'}" onclick="toggleQuizAnswer(${i})"><b>Answer / 答案</b> <span class="meta">${quizAnswersOpen[i]?'▲ 收起答案':'▼ 查看答案'}</span></button></div>${quizAnswersOpen[i]?`<div class="quiz-answer"><b>Answer / 答案：</b> ${escapeHtml(it.a)}<br><span class="meta">${escapeHtml(it.why)}</span></div>`:''}</div></div>`).join('')}
     <div class="path-actions"><button class="small-btn ghost" onclick="resetQuiz()">Reset / 重置</button><button class="small-btn ghost" onclick="showLearnTab('path')">Review Path / 回顾学习路径</button></div>
   </div>`;
 }
 
 function escapeHtml(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+// 学习进度在脚本末尾读入：必须等所有 const/let 声明完成，否则会撞上暂时性死区。
+loadLearnProgress();
 </script>
 </body>
 </html>
