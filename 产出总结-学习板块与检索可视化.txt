@@ -1,104 +1,126 @@
-学习板块与检索可视化（feat/learn-v4）产出总结
+学习板块进度与可视化（feat/learn-v5）产出总结
 ================================================
 仓库：Cissy4mA/Code-X-ray_Numpy-ml
-分支：feat/learn-v4  ->  目标分支 main
+分支：feat/learn-v5  ->  目标分支 main
 用途：PR 说明 / 分工交付说明（分工 2-2 学习板块、3-2 后端结果可视化）
+时间：2026-10-15 ~ 10-17
+说明：上一轮 feat/learn-v4（PR #6）已合入 main，本文件只记本轮增量。
 
 1. 改动范围
 ------------------------------------------------
-本分支相对 main 共改动 3 个文件，+396 / -80 行：
+本分支相对 main 改动 2 个文件，+234 / -15 行：
 
-  backend/learn.py        +221 / -13    学习路径后端重写
-  frontend/index.html     +251 / -66    气泡可视化、面板联动、交互修复
-  backend/app.py          +4   / -2     Path 接口增加 algorithm 查询参数
+  backend/learn.py        +18  / -0     Path 接口补 roadmap 与 module_size
+  frontend/index.html     +216 / -15    学习进度、路线图、检索区布局、气泡防重叠、按钮收起
 
-关键文件当前规模：
-  backend/learn.py                     435 行
-  frontend/index.html                  973 行
-  backend/app.py                       245 行
+文件规模：
+  backend/learn.py        453 行
+  frontend/index.html    1174 行
+  backend/app.py          245 行（未改）
 
-2. 学习路径（Path）改为后端自动生成
+2. 学习进度与模块路线图
 ------------------------------------------------
-接口：GET /api/learn/path?module={模块}&algorithm={算法}
+2.1 完成判定
+四步全部标记已读 = 该算法完成，模块进度 +1。小测降级为加分项：
+答对只增加「已自测」标记，不参与完成判定。
 
-之前前端用一张写死的表格（PATH_KNOWLEDGE / pathPlan）拼路径，换算法不会变。
-现在整条路径由索引库元数据推导，换一个算法，四步的标题、依据与条目都会随之变化。
+此前的完成口径是「小测答对」，于是清单走到 4/4 时模块进度仍停在 0/7，
+两个进度条口径不一致。
 
-四步结构：
-  步骤 1  数学前置      由算法标注的 math_methods 归并到所属基础学科（线性代数、概率统计、优化、信号处理等）
-  步骤 2  模块定位      给出模块名、算法族、任务类型、模块内算法数量，以及源码文件与行号
-  步骤 3  同模块横向对照 列出同模块其余算法及其行号区间，先横向扫一遍该族方法在解决什么
-  步骤 4  目标算法精读   给出目标源码行号区间、源码行数、关键参数、数学方法、复杂度参考值
+2.2 路线图节点三态
+  未读        普通灰色序号
+  读了一部分  序号保持数字，外圈细进度环表示 25% / 50% / 75%
+  四步读完    实心绿勾，节点卡片与顶部目标卡背景同时转绿，并弹出完成横幅
 
-数据来源（全部来自索引库，无人工写死）：
-  algorithms 表的 math_methods / complexity / start_line / end_line
-  modules 表的 family / description
-  code_files 表的 path
-  源码签名解析出的参数名（_signature_params / _merge_params）
+取消任意一步立即回退到上一状态。
 
-新增/改写的内部函数：
-  learning_path()      主入口，装配四步结构
-  _fetch_target()      按 module+algorithm 定位目标算法
-  _foundation_groups() 把 math_methods 归并成基础学科分组
-  _merge_params()      合并索引里的参数与源码签名解析出的参数
-  _signature_params()  从源码片段解析函数签名参数
-  _first_sentence()    截取模块描述的第一句
-  _json_list()         容错解析 JSON 字段
+2.3 进度持久化
+键为「算法名|源码路径」，值为四步的布尔数组，写入 localStorage。
+换算法、刷新页面、重启后端都不丢；「重置本算法进度」只清当前算法。
 
-说明：路径是「阅读顺序建议」，不是源码依赖关系的证明，接口返回的 note 字段已注明。
+2.4 切换学习目标
+点击路线图里任一节点，按类名回查检索接口拿到完整元数据，再交给 showDetail，
+复用既有链路，不改 showLearnTab 的守卫逻辑。
 
-3. 检索结果气泡可视化
+2.5 标记已读按钮的位置
+按钮收在展开的详解区内部，未展开的步骤不渲染，也不再单独占一行版面。
+目标步骤的「打开 Math Card 源码」与它并排，共用 .path-step-bar。
+
+2.6 数据来源
+路线图来自 /api/learn/path 新增的 roadmap 字段，是该模块全部算法的清单
+（名称、源码路径、行号区间、数学方法、复杂度）。
+原先 step 3 的 siblings 只取前 8 个，画不出完整路线图，故单独返回全量。
+
+3. 检索区布局与气泡遮挡修正
 ------------------------------------------------
-位置：搜索按钮下方的气泡区（#bubbleField），仅在检索板块展示。
+3.1 检索区四列网格
+问题：模块下拉、查询框、Top-K、检索按钮宽度失衡。查询框用 flex:1 吃掉剩余宽度，
+其余三个被内联 max-width 卡在 180 / 90 / 120px。
 
-  renderBubbles()  按检索结果生成气泡
-  jumpToResult()   点击气泡跳到对应结果卡片
+改法：该行加 search-controls 类，改为网格 1.2fr 1.6fr 1fr 1fr、间距 12px，
+内部控件统一 width:100% 并底部对齐，低于 700px 降为两列，内联宽度全部移除。
+只作用于检索行，模块检索那一行未动。
 
-半径映射：62 + 相似度比例 * 74，即 62–136 px，相关度越高气泡越大。
-颜色：每个气泡取随机 HSL 色调，仅用于区分为不同个体，不表示相似度。
-动画：requestAnimationFrame 驱动漂浮，带边界反弹与气泡间碰撞避让；
-      bubbleStop() 在重新渲染前取消上一轮动画帧，避免动画叠加。
-交互：悬停加高亮描边，气泡内显示名称与相似度百分比。
+3.2 气泡不再相互遮盖
+原实现只有四壁反弹，气泡之间没有碰撞检测。
+现为逐帧两两分离：重叠的两个气泡沿圆心连线推开，分开瞬间沿法线交换速度分量。
+三个细节：
+  碰撞半径按悬停放大 1.1 倍后的尺寸预留，悬停时不会压住邻居
+  每帧执行两遍分离，初始高度重叠时也能快速散开
+  分离后贴回容器边界，底部留 18px 条带避免盖住说明文字
 
-4. 交互修复
+4. Quiz 答案按钮统一为展开样式
 ------------------------------------------------
-问题：在 Path 面板切换选中的学习目标（换算法）后，Path 面板不刷新，
-      必须先去点一下数学卡片才会更新。
+「查看答案」改用 Path 的 .path-node 样式与 aria-expanded 属性：
+收起时显示「Answer / 答案  ▼ 查看答案」，展开后变为「▲ 收起答案」并进入蓝色高亮边框。
+没有新增样式类，直接复用现有规则。
 
-原因：showDetail 只负责渲染详情，从未通知 Learn 面板重新取数。
-
-修复：
-  新增 selectedKey    记录当前选中对象身份，用于判断是否需要重新取数
-  新增 currentLearnTab 记录当前 Learn 标签，选中对象变化时据此刷新对应面板
-  新增 refreshLearnPanel() 在选中对象变化时重新请求并渲染 Path / Complexity / Quiz
-  同时修复 Complexity / Quiz 面板的隐藏与 data-tab 高亮状态
-
-验证：用 jsdom 对照测试（前后端渲染逻辑复刻），改前 9 项断言失败，改后全部通过。
-
-5. 合并情况
+5. 顺手修掉的一个致命 bug
 ------------------------------------------------
-origin/main 最新为 af86c3e（含 Asa-67 的 PR#4：Learn V3 复杂度分析 + 理解测试，
-以及 showDetail 选中算法联动面板、showLearnTab 守卫）。
-该提交已合入 feat/learn-v4（merge commit 2932617），冲突按如下方式处理：
-  保留本分支「后端自动生成 Path」与 selectedKey 判重逻辑
-  吸收 main 的 showLearnTab 未知标签守卫
-本分支与 origin/main 之间已无待合并内容，PR 可干净合并。
+现象：把学习进度初始化写成 loadLearnProgress() 紧跟 loadStats()，该调用位于所有
+let 声明之前，顶层直接抛 ReferenceError: Cannot access 'learnProgress' before initialization。
 
-6. 接口清单（学习板块）
+影响：脚本中断，之后所有函数都注册不上，整页不可用。
+jsdom 默认吞掉脚本错误，需监听 jsdomError 才能发现。
+
+修复：把初始化调用挪到脚本末尾。
+
+6. 验证
 ------------------------------------------------
-GET /api/learn/modules?           模块列表
-GET /api/learn/card?module=&algorithm=  算法知识卡片
-GET /api/learn/compare?module=    同模块算法对比
-GET /api/learn/path?module=&algorithm=  自动生成学习路径（本次新增 algorithm 参数）
+测试脚本用 jsdom 真实执行页面脚本，fetch 用后端真实返回的样本打桩。
+
+  path-progress-main-test.js    50 / 50   路线图、进度、持久化、切换目标、重置
+  ui-three-fixes-test.js        17 / 17   检索区布局、气泡间隙、Quiz 按钮
+  learn-progress-demo-test.js   64 / 64   独立 demo 的交互与持久化
+
+气泡断言取所有气泡两两最小间隙，旧版本为 -95px（严重重叠），当前版本不小于 -0.5px，
+连跑 5 次稳定。另用 fastapi.testclient 直打真实 app，/api/learn/path 返回 HTTP 200，
+roadmap 与 module_size 长度均为 7。
+
+7. 接口清单（学习板块）
+------------------------------------------------
+GET /api/learn/modules?                          模块列表
+GET /api/learn/card?module=&algorithm=           算法知识卡片
+GET /api/learn/compare?module=                   同模块算法对比
+GET /api/learn/path?module=&algorithm=           学习路径（本次新增 roadmap / module_size）
 GET /api/learn/call_graph?module=&entity=&path=  调用关系图
 
-7. 本地验证方式
+8. 本地验证方式
 ------------------------------------------------
-后端：uvicorn backend.app:app --port 8000
+后端：uvicorn backend.app:app --host 127.0.0.1 --port 8000
+      启动前设 HF_HUB_OFFLINE=1，使用本地已缓存的 embedding 模型
 前端：FastAPI 同源静态托管，浏览器打开 http://127.0.0.1:8000/
-注意：数据库为 MySQL/MariaDB，需保证 3306 端口由 MariaDB 占用（官方 MySQL 8.0 服务已改为手动启动）。
+数据库：需保证 3306 由 XAMPP MariaDB 占用（官方 MySQL 8.0 已改为手动启动）
 
-8. 已知限制
+9. 已知限制
 ------------------------------------------------
 路径基于索引元数据生成，未做源码级依赖分析，可能给出偏保守的阅读顺序。
-气泡半径上限受容器高度（236px）约束，结果条数很多时会自动缩小并拥挤，属预期表现。
+学习进度存在浏览器 localStorage，换浏览器或清缓存后丢失，尚未做服务端同步。
+路线图只渲染当前模块，跨模块的学习顺序不在本次范围内。
+气泡半径受容器高度 236px 约束，结果条数很多时会自动缩小并拥挤。
+
+10. 待办（不属本分支范围）
+------------------------------------------------
+main 上 /api/eval 与 /api/eval/class_search 调用了 tests/eval_test.py 中不存在的函数名
+（实际为 evaluate_two_stage_pipeline / run_ablation_study），访问这两个地址会 500。
+属分工 3 的文件，需由对应负责人修正 app.py 的调用点。
