@@ -210,7 +210,7 @@ def learn_call_graph(module: str = "", entity: str = "", path: str = ""):
 # ---------------------------------------------------------------------------
 @app.get("/api/eval")
 def eval_endpoint():
-    return eval_test.evaluate()
+    return eval_test.evaluate_two_stage_pipeline()
 
 
 @app.get("/api/eval/modules")
@@ -221,7 +221,7 @@ def eval_modules_endpoint():
 @app.get("/api/eval/class_search")
 def eval_class_search_endpoint(kw_weight: float = 0.2, top_k: int = 5):
     """3.2 分类检索评测；kw_weight 为 keyword 通道权重，semantic = 1 - kw_weight。"""
-    return eval_test.evaluate_class_search(kw_weight=kw_weight, top_k=top_k)
+    return eval_test.run_ablation_study()
 
 
 @app.get("/api/smoke")
