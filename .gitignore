@@ -16,6 +16,7 @@ __pycache__/
 # 数据库导出 dump（体积大，按需本地生成，不进版本库）
 data/*.sql
 data/*.sqlite3
+data/backups/
 # 随仓库提供可直接运行的 numpy-ml 演示索引
 !data/code_x_ray.sqlite3
 

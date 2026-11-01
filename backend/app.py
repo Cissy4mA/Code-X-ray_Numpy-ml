@@ -25,14 +25,23 @@ if TESTS_DIR not in sys.path:
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend import db, parser
 from backend import retrieval, learn, index_pipeline
+from backend.embedding_index import EmbeddingIndexError
 import eval_test  # 评测模块位于 tests/，已加入 sys.path
 
 app = FastAPI(title="Code X-Ray")
+
+
+@app.exception_handler(EmbeddingIndexError)
+async def embedding_index_error(request, exc):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
 db.init_db()  # 启动时确保库表存在（含 v2 新增列）
 
 SAMPLE_PATH = os.path.join(REPO_ROOT, "sample", "sample_code.py")
@@ -211,14 +220,21 @@ def learn_card(module: str = "", algorithm: str = ""):
     return learn.get_card(module, algorithm or None)
 
 
+@app.get("/api/learn/algorithm")
+def learn_algorithm(module: str = "", algorithm: str = "", path: str = ""):
+    if not algorithm:
+        raise HTTPException(status_code=400, detail="An algorithm name is required.")
+    return learn.get_algorithm(module, algorithm, path)
+
+
 @app.get("/api/learn/compare")
 def learn_compare(module: str = ""):
     return learn.compare(module)
 
 
 @app.get("/api/learn/path")
-def learn_path(module: str = ""):
-    return learn.learning_path(module or None)
+def learn_path(module: str = "", algorithm: str = "", path: str = ""):
+    return learn.learning_path(module or None, algorithm or None, path)
 
 
 @app.get("/api/learn/call_graph")

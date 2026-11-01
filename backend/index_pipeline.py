@@ -12,6 +12,7 @@ import tempfile
 from collections import defaultdict
 
 from backend import db, parser
+from backend.embedding_index import prepare_for_indexing
 
 
 def reset_all():
@@ -25,6 +26,10 @@ def reset_all():
             cur.execute(f"DELETE FROM {t}")
         else:
             cur.execute(f"TRUNCATE TABLE {t}")
+    if db.is_sqlite():
+        cur.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='embedding_index'")
+        if cur.fetchone():
+            cur.execute("DELETE FROM embedding_index")
     if not db.is_sqlite():
         cur.execute("SET FOREIGN_KEY_CHECKS=1")
     conn.close()
@@ -33,6 +38,7 @@ def reset_all():
 def index_code(code, filename, module_path="", project_id=None, module_id=None):
     """解析代码为 class / function 级 chunk，生成 embedding，写入 MySQL。返回 chunk 数。
     若 project_id 已提供则复用该项目，否则为单个文件新建一个项目。"""
+    prepare_for_indexing()
     chunks = parser.extract_chunks(code, filename, module_path)
 
     conn = db.get_conn()
@@ -101,6 +107,8 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
     """从 GitHub 导入仓库：git clone → 遍历 .py → 类级切分 → 嵌入 → 入库。"""
     if reset_first:
         reset_all()
+
+    prepare_for_indexing()
 
     cleanup_tmp = False
     if os.path.isdir(repo_url):
@@ -177,7 +185,7 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
         aliases = parser.MODULE_ALIASES.get(module, [])
         # 方案 3：为模块生成「富集语义向量」——name + 算法族 + 别名 + README 一起编码，
         # 让模块级语义检索能命中别名/概念层（如 "normalize and scale features" -> preprocessing）
-        readme_vec = parser.embed_module(module, family, aliases, readme) if readme else [0.0] * parser.DIM
+        readme_vec = parser.embed_module(module, family, aliases, readme)
         if db.is_sqlite():
             cur.execute(
                 "INSERT INTO modules(project_id,name,family,task,readme,aliases,readme_embedding) "

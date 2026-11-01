@@ -23,7 +23,7 @@ export default function CardDeck({ modes, onActive }: Props) {
   const n = modes.length
   const [pos, setPos] = useState(0)
   const [vw, setVw] = useState(() => window.innerWidth)
-  const [auto, setAuto] = useState(true)
+  const [auto, setAuto] = useState(false)
 
   const posRef = useRef(0)
   const targetRef = useRef(0)
@@ -153,9 +153,11 @@ export default function CardDeck({ modes, onActive }: Props) {
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'ArrowLeft') {
       e.preventDefault()
+      e.currentTarget.focus()
       bump(-1)
     } else if (e.key === 'ArrowRight') {
       e.preventDefault()
+      e.currentTarget.focus()
       bump(1)
     }
   }
@@ -176,6 +178,8 @@ export default function CardDeck({ modes, onActive }: Props) {
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
+        onPointerLeave={() => { if (!capturedRef.current) endDrag() }}
       >
         <div className="absolute inset-0" style={{ transformStyle: 'preserve-3d' }}>
           {modes.map((m, i) => {
@@ -190,6 +194,8 @@ export default function CardDeck({ modes, onActive }: Props) {
                 type="button"
                 aria-label={`${m.en.replace('\n', ' ')} / ${m.zh}`}
                 aria-current={isActive}
+                aria-hidden={hidden}
+                tabIndex={hidden ? -1 : 0}
                 onClick={() => {
                   if (suppressClick.current) {
                     suppressClick.current = false
@@ -197,7 +203,7 @@ export default function CardDeck({ modes, onActive }: Props) {
                   }
                   goTo(i)
                 }}
-                className="group absolute left-1/2 top-1/2 cursor-pointer overflow-hidden rounded-[16px] text-left"
+                className="learn-orbit-card group absolute left-1/2 top-1/2 cursor-pointer overflow-hidden rounded-[20px] text-left"
                 style={{
                   width: cardW,
                   height: cardH,
@@ -208,16 +214,17 @@ export default function CardDeck({ modes, onActive }: Props) {
                   opacity: hidden ? 0 : Math.max(0.4, 1 - ad * 0.14),
                   filter: `brightness(${(1 - ad * 0.16).toFixed(3)})`,
                   boxShadow:
-                    'inset 0 1px 0 rgba(255,255,255,0.4), 0 24px 48px -18px rgba(20,28,40,0.45)',
+                    'inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(164,185,220,0.35), 0 28px 50px -20px rgba(24,39,67,0.48)',
                   transition: 'opacity 0.3s ease',
                   pointerEvents: hidden ? 'none' : 'auto',
                 }}
               >
                 <PatternCanvas kind={m.pattern} ink={m.ink} className="absolute inset-0 h-full w-full" />
+                <span aria-hidden="true" className="absolute left-4 top-3 font-mono text-[8px] tracking-[0.2em] opacity-60">CXR / {m.pattern.toUpperCase()}</span>
 
                 {/* card number */}
                 <span
-                  className="absolute right-4 top-3 font-mono text-xs tracking-widest opacity-70"
+                  className="absolute right-3 top-2.5 rounded-full border border-current/20 px-2 py-0.5 font-mono text-[10px] tracking-widest opacity-70"
                 >
                   {m.num}
                 </span>
@@ -248,7 +255,7 @@ export default function CardDeck({ modes, onActive }: Props) {
       </div>
 
       {/* controls */}
-      <div className="mx-auto mt-2 flex w-full max-w-6xl items-center justify-center gap-2 px-4 sm:gap-4">
+      <div className="mx-auto mt-2 flex w-full max-w-6xl flex-wrap items-center justify-center gap-2 px-4 sm:gap-4">
         <button
           type="button"
           onClick={() => bump(-1)}
@@ -260,7 +267,7 @@ export default function CardDeck({ modes, onActive }: Props) {
           </svg>
         </button>
 
-        <div className="flex items-center">
+        <div className="order-first flex w-full items-center justify-center sm:order-none sm:w-auto">
           {modes.map((m, i) => (
             <button
               key={m.id}

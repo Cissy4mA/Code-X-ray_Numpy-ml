@@ -52,7 +52,26 @@ http://127.0.0.1:8000
 bash scripts/run.sh
 ```
 
-仓库自带约 4.8MB 的 SQLite 索引，因此部署脚本会跳过重新导入。第一次执行语义搜索时，`sentence-transformers` 可能下载本地模型；下载完成后会使用本机缓存。
+仓库自带 SQLite 语义索引，因此部署脚本会跳过重新导入。查询和索引统一使用固定版本的 `sentence-transformers/all-MiniLM-L6-v2`（384 维）。首次使用需要模型文件，本地已有完整缓存时可离线加载；没有缓存时会下载。
+
+### 语义模型与索引迁移
+
+`.env` 使用 `EMBEDDING_BACKEND=local`，模型名称和版本见 `.env.example`。显式设置 `local` 后，即使环境中存在 API key，也不会切换到 API。模块检索使用关键词与语义名次的 RRF 融合；算法检索默认使用 0.2 关键词、0.8 语义权重，不再因为数据库是 SQLite 就采用 hash 演示权重。
+
+更换模型或从旧 hash 索引迁移时，必须全量重建，不能只更新模块向量：
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/reembed_all.py
+```
+
+脚本仅支持 SQLite，先在数据库旁的 `backups/` 保存备份，再在同一事务内更新模块、算法类和函数／方法的全部向量。任一步失败会回滚，不会留下混合模型索引；源码、参数等原始数据保持不变。迁移期间会锁定数据库写入，建议暂停管理端导入操作。旧入口 `scripts/reembed_modules.py` 也会执行全量迁移。
+
+数据库的 `embedding_index` 表记录模型、固定版本和维度。查询配置不匹配或旧库没有模型记录时，搜索接口返回 503 和重建提示，不会悄悄使用错误向量。修改 `.env`、后端代码或完成迁移后，停止旧进程，再用 `bash scripts/run.sh` 启动；运行中的进程不会自动载入新配置。MySQL 不在此次迁移脚本及模型身份校验的支持范围内。
+
+启用真实模型不代表检索准确率已经得到验证。中文别名匹配仍保留；中文自然语言检索效果需要单独评估，不应据此宣称完整的跨语言语义能力。
 
 ## 前端开发
 
@@ -112,7 +131,34 @@ ENABLE_ADMIN_API=0
 
 如果平台使用临时文件系统，内置 SQLite 数据仍然可用于只读演示；若未来允许用户导入仓库并长期保存数据，应改用持久磁盘或托管数据库。
 
-## 主要 API
+## 网站检索流程
+
+网站名称为 **Code-X-Ray**，完整标题为 *Code-X-Ray — A Machine Learning Code Retrieval and Learning Platform for NumPy-ML*。
+
+首页展示 Code-X-Ray 品牌及 ML Code Retrieval & Learning 标题，使用优化后的背景图。标题、平台说明与搜索栏采用自适应纵向布局；长查询在输入框内滚动，不覆盖提交按钮。
+
+Browse 页面提供前后衔接的两步检索，而不是两种并列方法：
+
+1. **Step 1 · Find a module**：用算法名、主题或任务描述搜索整个仓库，阅读匹配模块的 README。
+2. **Step 2 · Find an algorithm**：选择模块后，自动沿用原查询，在该模块内检索算法类；可继续细化查询，再打开 Learn 页面。
+
+首页搜索也从模块定位开始。未选择模块时不会执行全局算法搜索；仓库未收录的算法在第一步提示并停止下钻。
+
+## 学习页面
+
+- **Math Card**：展示已收录的数学卡片及真实索引标签、参数、文档和源码；没有卡片时不显示额外的空状态提示，接口加载失败时仍显示错误和适用的重试入口。
+- **Path**：按当前算法生成四步阅读建议，支持勾选进度、重置及同模块算法切换。进度只保存在当前浏览器；模块列表按名称排序，不代表先修或难度顺序。
+- **Related Functions**：展示当前算法实际索引的成员函数，不生成相似度分数。
+- **Call Graph**：读取静态调用图，只展示可解析的索引边，另列未解析符号；不代表运行时追踪。
+- **Compare**：选择另一个同模块算法，对比真实索引字段。
+- **Complexity**：展示 AST 结构证据与索引启发式指标，不把源码评分当作 Big-O。
+- **Self-check**：基于算法元数据生成阅读自测，可展开参考答案，不自动评分。
+
+卡牌默认不自动轮播，避免阅读时切换。检索相关性仅展示后端排序分数，不表示正确概率。
+
+从 Learn 返回 Browse 时会恢复本次打开网站期间的查询、模块和结果。独立函数与算法类一同展示，结果卡片保留三项检索得分和源码。接口暂时失败时可直接点击 Retry 重试。
+
+## API 列表
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -121,8 +167,9 @@ ENABLE_ADMIN_API=0
 | POST | `/api/modules/search` | 模块检索 |
 | POST | `/api/search` | 算法混合检索 |
 | GET | `/api/learn/card` | 数学原理卡片 |
+| GET | `/api/learn/algorithm` | 按 module、algorithm、path 获取真实算法详情和源码结构证据 |
 | GET | `/api/learn/compare` | 算法对比 |
-| GET | `/api/learn/path` | 学习路径 |
+| GET | `/api/learn/path` | 按 module、algorithm、path 生成阅读路径和模块列表 |
 | GET | `/api/learn/call_graph` | 调用关系图 |
 | GET | `/api/smoke` | 数据库冒烟检查 |
 
@@ -162,6 +209,42 @@ npm run build
 cd ..
 python -m pytest
 ```
+
+学习接口回归测试不需要下载语义模型：
+
+```bash
+python -m unittest discover -s tests -p 'test_learn_api.py' -v
+cd frontend && npm run test:learning
+```
+
+若环境已提供 `playwright-core` 和 Chrome，可在网站启动后运行浏览器回归：
+
+```bash
+node tests/test_browser.cjs
+node tests/test_api_display.cjs
+```
+
+可用 `PLAYWRIGHT_MODULE` 指定 Playwright 模块位置，`CHROME_PATH` 指定 Chrome 可执行文件，`TEST_BASE_URL` 指定网站地址（默认 `http://127.0.0.1:8000`）。测试使用隔离浏览器上下文，覆盖两阶段检索、独立函数、进度、重试、前后退和四种屏幕宽度。
+
+`test_api_display.cjs` 额外检查模块匹配理由、对比表数学说明与参考文献、缺失值及接口错误分类。异常响应和对比字段样本仅在测试浏览器中模拟，不写入数据库。
+
+向量迁移与模型身份校验的单元测试不需要下载模型，也不会修改真实数据库：
+
+```bash
+python -m unittest discover -s tests -p 'test_embedding_index.py' -v
+```
+
+`hash` 只用于演示，不是语义模型；全量正式迁移脚本会拒绝此配置。
+
+已有完整模型缓存且已完成语义索引迁移时，可运行真实模型的两阶段接口冒烟测试（使用数据库副本）：
+
+```bash
+set -a; source .env; set +a
+RUN_SEMANTIC_TESTS=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+  .venv/bin/python -m unittest discover -s tests -p 'test_semantic_search.py' -v
+```
+
+这些是功能回归用例，不是独立测试集上的检索准确率评测。
 
 至少还应启动一次网站并检查：
 

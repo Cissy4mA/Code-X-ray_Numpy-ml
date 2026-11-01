@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { MODES } from '@/data/learn'
 import CardDeck from '@/sections/CardDeck'
 import ModePanel, { type AlgorithmResult } from '@/sections/panels'
+import { algorithmName } from '@/data/learning'
 
 /** Same orbit mark used on the Orbit home / search pages. */
 function OrbitMark({ className }: { className?: string }) {
@@ -24,29 +25,21 @@ export default function LearnSection() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem('codexray:selectedAlgorithm')
-      setAlgorithm(raw ? JSON.parse(raw) : null)
+      const selected = raw ? JSON.parse(raw) : null
+      setAlgorithm(selected && typeof selected === 'object' && typeof selected.entity === 'string' ? selected : null)
     } catch {
       setAlgorithm(null)
     }
   }, [])
 
-  return (
-    <section
-      className="learn-page relative min-h-screen overflow-hidden pb-16"
-      style={{
-        background: 'linear-gradient(180deg, #eef1f6 0%, #dde2ea 100%)',
-      }}
-    >
-      {/* polished sheen across the top */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
-        style={{
-          background:
-            'radial-gradient(60% 100% at 50% 0%, rgba(255,255,255,0.75), transparent)',
-        }}
-        aria-hidden="true"
-      />
+  function selectAlgorithm(selected: AlgorithmResult) {
+    const identity = { entity: algorithmName(selected), module: selected.module, path: selected.path }
+    setAlgorithm(identity)
+    try { localStorage.setItem('codexray:selectedAlgorithm', JSON.stringify(identity)) } catch { return }
+  }
 
+  return (
+    <section className="learn-page relative min-h-screen overflow-hidden pb-16">
       {/* slim header — same brand, same centered glass seg, same GitHub icon as the Orbit pages */}
       <header className="relative mx-auto flex w-full max-w-[1240px] items-center px-5 pt-5 sm:px-8">
         <a
@@ -55,7 +48,7 @@ export default function LearnSection() {
           style={{ fontSize: 17, letterSpacing: '-0.02em', textDecoration: 'none' }}
         >
           <OrbitMark className="h-[16px] w-[26px] overflow-visible" />
-          Orbit
+          Code-X-Ray
         </a>
 
         <nav className="learn-seg absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-0.5 rounded-full border border-[rgba(20,28,40,0.12)] bg-[rgba(255,255,255,0.52)] p-[3px] backdrop-blur-md sm:flex">
@@ -107,10 +100,9 @@ export default function LearnSection() {
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed" style={{ color: 'rgba(28,36,52,0.62)' }}>
           拖动卡盘、点击卡牌，或用 <kbd className="rounded border border-[rgba(20,28,40,0.14)] bg-white/70 px-1.5 py-0.5 font-mono text-[11px] text-[#1c2434]">←</kbd>{' '}
-          <kbd className="rounded border border-[rgba(20,28,40,0.14)] bg-white/70 px-1.5 py-0.5 font-mono text-[11px] text-[#1c2434]">→</kbd> 切换五种学习模式。
+          <kbd className="rounded border border-[rgba(20,28,40,0.14)] bg-white/70 px-1.5 py-0.5 font-mono text-[11px] text-[#1c2434]">→</kbd> 切换 {MODES.length} 种学习模式。
           <span className="block" style={{ color: 'rgba(28,36,52,0.42)' }}>
-            Drag the deck, tap a card, or use the arrow keys to rotate through the five learning
-            modes.
+            Explore {MODES.length} learning modes. Reading progress is saved on this browser; automatic rotation is off by default.
           </span>
         </p>
       </div>
@@ -122,21 +114,19 @@ export default function LearnSection() {
 
           {/* content panel, swaps with a blur-to-clear entrance */}
           <div className="relative mx-auto mt-10 w-full max-w-6xl px-4 sm:px-6 md:mt-14">
-            <div key={mode.id} className="panel-enter">
-              <ModePanel mode={mode} algorithm={algorithm} />
+            <div key={`${algorithm.module}:${algorithm.path}:${algorithmName(algorithm)}`} className="panel-enter">
+              <ModePanel mode={mode} algorithm={algorithm} onSelect={selectAlgorithm} />
             </div>
             <p className="mt-5 text-center font-mono text-[11px]" style={{ color: 'rgba(28,36,52,0.42)' }}>
-              数据来自搜索结果 / Search result — {algorithm.entity || algorithm.name || algorithm.class_name} ({algorithm.module || 'module unknown'})
+              {algorithmName(algorithm)} · {algorithm.module || 'NumPy-ML'}
             </p>
           </div>
         </>
       ) : (
         <div className="relative mx-auto mt-8 w-full max-w-2xl px-4 sm:px-6">
           <div
-            className="rounded-2xl border p-8 text-center backdrop-blur-md"
+            className="learn-glass rounded-2xl border p-8 text-center"
             style={{
-              borderColor: 'rgba(20,28,40,0.12)',
-              background: 'rgba(255,255,255,0.58)',
               boxShadow: '0 18px 40px -24px rgba(20,28,40,0.25)',
             }}
           >
@@ -147,7 +137,7 @@ export default function LearnSection() {
               先搜索一个算法，再打开学习卡片
             </h3>
             <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed" style={{ color: 'rgba(28,36,52,0.62)' }}>
-              第三页不会再默认展示随机示例。请回到 Browse，搜索算法后点击结果卡片里的 Open the Learn Page。
+              在 Browse 中找到算法后，点击 Open the Learn Page 开始阅读。
             </p>
             <a
               href="#search"

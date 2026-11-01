@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test:learning": "node ../tests/test_frontend.cjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

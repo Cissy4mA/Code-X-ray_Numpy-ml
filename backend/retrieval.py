@@ -9,6 +9,7 @@ import json
 import re
 
 from backend import db, parser
+from backend.embedding_index import ensure_compatible, embed_query
 
 # 模块关键词匹配用的英文停用词（避免 of/to/the 等虚词污染名次；与代码 chunk 检索无关）
 EN_STOP = set(
@@ -218,7 +219,7 @@ def preprocess_query(q):
 def rank(req):
     """混合检索核心：FULLTEXT 关键词分 + 余弦语义分，归一化后 0.5/0.5 融合。
     返回 (results, query_vector)。results 每项带 'vector'（调试用，普通搜索剔除）。"""
-    qvec = parser.embed(expand_query(req.query))
+    qvec = embed_query(expand_query(req.query))
     conn = db.get_conn()
     cur = conn.cursor()
 
@@ -290,8 +291,8 @@ def rank(req):
     smin, smax = min(sem_vals), max(sem_vals)
     kmin, kmax = min(kw_vals), max(kw_vals)
     for x in results:
-        sn = (x["semantic"] - smin) / (smax - smin) if smax > smin else 0
-        kn = (x["keyword"] - kmin) / (kmax - kmin) if kmax > kmin else 0
+        sn = (x["semantic"] - smin) / (smax - smin) if smax > smin else max(0, x["semantic"])
+        kn = (x["keyword"] - kmin) / (kmax - kmin) if kmax > kmin else float(x["keyword"] > 0)
         x["fused"] = round(0.5 * sn + 0.5 * kn, 4)
     results.sort(key=lambda d: d["fused"], reverse=True)
     return results, qvec
@@ -332,9 +333,7 @@ def class_search(req):
     游离函数（不属于任何分类）作为 'free_functions' 单独返回，仅在相关时列出。"""
     # 默认 keyword 权重 0.2，semantic 0.8；由 eval 网格搜索确定，eval 脚本可覆盖
     kw_weight = getattr(req, "kw_weight", 0.2)
-    if db.is_sqlite() and not hasattr(req, "kw_weight"):
-        # SQLite demo mode uses hash embeddings instead of the transformer model,
-        # so keyword evidence should dominate the default user-facing search.
+    if parser.embedding_config()["backend"] == "hash" and not hasattr(req, "kw_weight"):
         kw_weight = 0.85
     return _class_search_weighted(req, kw_weight=kw_weight)
 
@@ -355,7 +354,7 @@ def _class_search_weighted(req, kw_weight=0.2):
             "results": [],
             "free_functions": [],
         }
-    qvec = parser.embed(preprocess_query(req.query))
+    qvec = embed_query(preprocess_query(req.query))
     conn = db.get_conn()
     cur = conn.cursor()
 
@@ -420,8 +419,8 @@ def _class_search_weighted(req, kw_weight=0.2):
     sem_weight = 1.0 - kw_weight
     qnorm = _norm(preprocess_query(req.query))
     for x in results:
-        sn = (x["semantic"] - smin) / (smax - smin) if smax > smin else 0
-        kn = (x["keyword"] - kmin) / (kmax - kmin) if kmax > kmin else 0
+        sn = (x["semantic"] - smin) / (smax - smin) if smax > smin else max(0, x["semantic"])
+        kn = (x["keyword"] - kmin) / (kmax - kmin) if kmax > kmin else float(x["keyword"] > 0)
         fused = kw_weight * kn + sem_weight * sn
         # 类名命中加权（Gemini 建议 #2）：查询里出现候选类名（或反之），轻量上浮，
         # 抑制基类/通用类抢位（如 k-means 本应落到 KMeans，而非 MeanBaseEstimator）。
@@ -503,8 +502,8 @@ def _class_search_weighted(req, kw_weight=0.2):
         fsmin, fsmax = min(fsem), max(fsem)
         fkmin, fkmax = min(fkw), max(fkw)
         for x in free_results:
-            sn = (x["semantic"] - fsmin) / (fsmax - fsmin) if fsmax > fsmin else 0
-            kn = (x["keyword"] - fkmin) / (fkmax - fkmin) if fkmax > fkmin else 0
+            sn = (x["semantic"] - fsmin) / (fsmax - fsmin) if fsmax > fsmin else max(0, x["semantic"])
+            kn = (x["keyword"] - fkmin) / (fkmax - fkmin) if fkmax > fkmin else float(x["keyword"] > 0)
             x["fused"] = round(kw_weight * kn + sem_weight * sn, 4)
         free_results.sort(key=lambda d: d["fused"], reverse=True)
         # 只保留真正相关的：关键词命中或语义分>0.3
@@ -615,6 +614,7 @@ def module_search(req):
       ④ RRF 融合：score = Σ 1/(k+rank)，只看名次、不归一化分数、不调权重。
     返回按 RRF 降序的模块卡片，并附带 score 与 why（命中原因）。
     """
+    ensure_compatible()
     q = (req.query or "").strip().lower()
     q_pp = preprocess_query(req.query)  # 拼写纠错 + 昵称展开 + SYNONYMS 扩展，3.2 已用，3.1 此处对齐
     # 仓库外算法：未收录提示优先于正常检索（避免返回语义替身误导用户）
@@ -694,7 +694,7 @@ def module_search(req):
     kw_rank = {m: i + 1 for i, m in enumerate(kw_ranked)}
 
     # ③ 语义名次：query 向量 vs 各模块 README 向量余弦
-    qvec = parser.embed(q_pp)
+    qvec = embed_query(q_pp)
     sem_scores = {}
     for r in rows:
         mid = r[0]
