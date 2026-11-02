@@ -1,0 +1,13 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+.env
+.DS_Store
+frontend/node_modules
+node_modules
+models
+.cache
+tests/__pycache__

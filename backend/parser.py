@@ -20,6 +20,8 @@ import math
 import json
 import os
 import urllib.request
+import hashlib
+import threading
 
 PY_STOP = set(
     "def return if else elif for while import from as class try except with lambda "
@@ -476,25 +478,85 @@ def rewrite_image_paths(readme: str, module: str, repo_url: str, branch: str = "
 # 3. Embedding：API 优先，本地 sentence-transformers 兜底（默认）
 # -----------------------------------------------------------------------------
 _MODEL = None
+_MODEL_CONFIG = None
+_MODEL_LOCK = threading.Lock()
+DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+
+
+def embedding_config():
+    backend = os.environ.get("EMBEDDING_BACKEND", "").strip().lower()
+    if not backend:
+        backend = "api" if os.environ.get("EMBEDDING_API_KEY") else "local"
+    if backend == "hash":
+        return {"backend": backend, "model": "sha256-token-hash-v1", "recipe": 1}
+    if backend == "local":
+        model = os.environ.get("EMBEDDING_LOCAL_MODEL", DEFAULT_MODEL)
+        revision = os.environ.get("EMBEDDING_LOCAL_REVISION")
+        if not revision:
+            if model != DEFAULT_MODEL:
+                raise ValueError("Set EMBEDDING_LOCAL_REVISION to pin the local model version.")
+            revision = DEFAULT_REVISION
+        return {"backend": backend, "model": model, "revision": revision, "recipe": 1}
+    if backend == "api":
+        return {"backend": backend,
+                "model": os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small"),
+                "endpoint": os.environ.get("EMBEDDING_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
+                "recipe": 1}
+    raise ValueError(f"Unknown EMBEDDING_BACKEND: {backend}")
 
 
 def _get_model():
-    global _MODEL
-    if _MODEL is None:
+    global _MODEL, _MODEL_CONFIG
+    config = embedding_config()
+    if _MODEL is not None and _MODEL_CONFIG == config:
+        return _MODEL
+    with _MODEL_LOCK:
+        if _MODEL is not None and _MODEL_CONFIG == config:
+            return _MODEL
         from sentence_transformers import SentenceTransformer
-        # 国内镜像优先；HF_ENDPOINT 可在环境中设置
-        _MODEL = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+        from huggingface_hub import snapshot_download
+        options = {"revision": config["revision"]}
+        try:
+            snapshot = snapshot_download(config["model"], local_files_only=True, **options)
+            model = SentenceTransformer(snapshot, local_files_only=True)
+        except OSError:
+            model = SentenceTransformer(config["model"], **options)
+        _MODEL = model
+        _MODEL_CONFIG = config
     return _MODEL
 
 
 def embed(text):
-    """生成文本向量。有 EMBEDDING_API_KEY 走 API，否则本地模型（默认）。"""
-    key = os.environ.get("EMBEDDING_API_KEY")
-    if key:
-        return _embed_api(text, key)
+    """使用显式配置的同一模型生成单位向量。"""
+    config = embedding_config()
+    if config["backend"] == "hash":
+        return _embed_hash(text)
+    if config["backend"] == "api":
+        key = os.environ.get("EMBEDDING_API_KEY")
+        if not key:
+            raise ValueError("EMBEDDING_BACKEND=api requires EMBEDDING_API_KEY")
+        return normalize_vector(_embed_api(text, key))
     model = _get_model()
     vec = model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
     return vec.tolist()
+
+
+def embed_many(texts, batch_size=32):
+    if embedding_config()["backend"] == "local":
+        return _get_model().encode(texts, batch_size=batch_size, convert_to_numpy=True,
+                                   normalize_embeddings=True).tolist()
+    return [embed(text) for text in texts]
+
+
+def normalize_vector(vector):
+    values = [float(value) for value in vector]
+    if not values or not all(math.isfinite(value) for value in values):
+        raise ValueError("Embedding must be nonempty and finite")
+    norm = math.sqrt(sum(value * value for value in values))
+    if not math.isfinite(norm) or norm == 0:
+        raise ValueError("Embedding must have finite nonzero norm")
+    return [value / norm for value in values]
 
 
 def module_embed_text(name, family, aliases, readme):
@@ -520,10 +582,10 @@ def tokenize(text):
 
 
 def _embed_hash(text):
-    """本地哈希 embedding（无语义兜底，仅在无模型且 API key 时也缺失时使用）。"""
+    """显式演示模式：稳定的 token 哈希，没有语义能力。"""
     vec = [0.0] * DIM
     for t in tokenize(text):
-        h = hash(t)
+        h = int.from_bytes(hashlib.sha256(t.encode("utf-8")).digest()[:8], "big")
         idx = (h % DIM + DIM) % DIM
         vec[idx] += 1.0
     norm = math.sqrt(sum(v * v for v in vec))
@@ -534,6 +596,8 @@ def _embed_hash(text):
 
 def cosine(a, b):
     """两个归一化向量的点积即余弦相似度。"""
+    if not a or len(a) != len(b):
+        raise ValueError("Embedding dimensions differ; rebuild the complete index")
     return sum(x * y for x, y in zip(a, b))
 
 

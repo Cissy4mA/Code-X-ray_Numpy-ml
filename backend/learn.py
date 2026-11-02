@@ -5,9 +5,11 @@
 数据存放在 data/learn_content.json（仓库已带一份空模板）。可直接往该 JSON 填内容，
 或改写下面的函数接数据库 / 调 retrieval 也行。前端通过 /api/learn/* 拿数据，不用动 retrieval.py。
 """
+import ast
 import json
 import os
 import re
+import textwrap
 
 from backend import db
 
@@ -52,16 +54,83 @@ def get_card(module, algorithm=None):
     cards = m.get("cards", []) or []
     if algorithm:
         cards = [c for c in cards if c.get("algorithm") == algorithm]
-    return {"module": module, "cards": cards}
+    return {"module": module, "cards": cards, "source": "curated"}
 
 
 def compare(module):
     """返回某模块的算法对比表。"""
     m = _module(module)
-    return {"module": module, "compare": m.get("compare", []) or []}
+    conn = db.get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT a.name, f.path FROM algorithms a JOIN code_files f ON a.file_id=f.id "
+            "WHERE a.module=%s ORDER BY a.name, f.path",
+            (module,))
+        identities = cur.fetchall()
+        algorithms = []
+        for name, path in identities:
+            target = _fetch_target(cur, module, name, path)
+            if target:
+                detail = _algorithm_detail(cur, target, include_functions=False)
+                detail.pop("code", None)
+                algorithms.append(detail)
+        return {"module": module, "compare": m.get("compare", []) or [],
+                "algorithms": algorithms}
+    finally:
+        conn.close()
 
 
-def learning_path(module=None, algorithm=None):
+def get_algorithm(module, algorithm, path=""):
+    conn = db.get_conn()
+    try:
+        cur = conn.cursor()
+        target = _fetch_target(cur, module, algorithm, path)
+        return {"algorithm": _algorithm_detail(cur, target) if target else None}
+    finally:
+        conn.close()
+
+
+def _algorithm_detail(cur, target, include_functions=True):
+    functions = []
+    if include_functions:
+        cur.execute(
+            "SELECT fn.name, fn.docstring_math, fn.code_text "
+            "FROM functions fn JOIN code_files f ON fn.file_id=f.id "
+            "WHERE fn.module=%s AND fn.parent_class=%s AND f.path=%s ORDER BY fn.start_line",
+            (target["module"], target["name"], target["path"]))
+        functions = [{"name": row[0], "meaning": row[1] or "", "code": row[2] or ""}
+                     for row in cur.fetchall()]
+    return {
+        "entity": target["name"], "module": target["module"],
+        "family": target["family"] or "", "task": target["task"] or "",
+        "math_methods": target["math_methods"],
+        "params": _merge_params(target["params"], _signature_params(target["code_text"])),
+        "docstring_math": target["docstring_math"] or "", "complexity": target["complexity"],
+        "references": _json_list(target.get("references")),
+        "source_signals": _source_signals(target["code_text"]),
+        "path": target["path"], "lines": f'{target["start_line"]}-{target["end_line"]}',
+        "code": target["code_text"] or "", "functions": functions,
+    }
+
+
+def _source_signals(code):
+    try:
+        tree = ast.parse(textwrap.dedent(code or ""))
+    except (SyntaxError, ValueError):
+        return None
+    nodes = list(ast.walk(tree))
+    return {
+        "lines": len((code or "").splitlines()),
+        "for_loops": sum(isinstance(node, (ast.For, ast.AsyncFor)) for node in nodes),
+        "while_loops": sum(isinstance(node, ast.While) for node in nodes),
+        "comprehensions": sum(isinstance(node, ast.comprehension) for node in nodes),
+        "branches": sum(isinstance(node, (ast.If, ast.IfExp)) for node in nodes),
+        "matrix_operators": sum(isinstance(node, ast.MatMult) for node in nodes),
+    }
+
+
+def learning_path(module=None, algorithm=None, path=""):
     """按选中的算法自动生成分步学习路径。
 
     路径完全由索引库里的元数据推导：算法自身的数学方法、它所属的模块、
@@ -71,7 +140,7 @@ def learning_path(module=None, algorithm=None):
     conn = db.get_conn()
     cur = conn.cursor()
     try:
-        target = _fetch_target(cur, module, algorithm)
+        target = _fetch_target(cur, module, algorithm, path)
         if not target:
             return {"module": module or "", "algorithm": algorithm or "", "steps": [],
                     "note": "The selected algorithm was not found in the index. / 未在索引中找到该算法。"}
@@ -85,8 +154,8 @@ def learning_path(module=None, algorithm=None):
         cur.execute(
             "SELECT a.name, a.start_line, a.end_line, a.math_methods, a.complexity, f.path "
             "FROM algorithms a JOIN code_files f ON a.file_id=f.id "
-            "WHERE a.module=%s AND a.name<>%s ORDER BY a.name",
-            (mod, target["name"]))
+            "WHERE a.module=%s AND (a.name<>%s OR f.path<>%s) ORDER BY a.name, f.path",
+            (mod, target["name"], target["path"]))
         siblings = [{
             "name": r[0], "lines": f"{r[1]}-{r[2]}",
             "math_methods": _json_list(r[3])[:3], "complexity": r[4], "path": r[5],
@@ -141,7 +210,7 @@ def learning_path(module=None, algorithm=None):
             "items": [
                 {"name": "关键参数", "note": ", ".join(str(p) for p in params[:8]) or "—"},
                 {"name": "数学方法", "note": ", ".join(str(m) for m in methods[:8]) or "—"},
-            ] + ([{"name": "开销参考值", "note": str(target["complexity"])}] if target.get("complexity") is not None else []),
+            ] + ([{"name": "源码复杂度启发式指标（非 Big-O）", "note": str(target["complexity"])}] if target.get("complexity") is not None else []),
         },
     ]
 
@@ -167,14 +236,13 @@ def learning_path(module=None, algorithm=None):
         "steps": steps,
         "source": {"path": target["path"], "lines": f"{target['start_line']}-{target['end_line']}"},
         "module_size": mod_size,
-        "roadmap": sorted(roadmap, key=lambda r: r["name"]),   # 模块内全部算法，供前端画路线图与统计进度
+        "roadmap": sorted(roadmap, key=lambda r: r["name"]),
         "note": ("Path is generated from indexed metadata (math methods, module membership, "
                  "sibling algorithms, source size). It is a reading order, not a verified dependency proof. / "
                  "路径由索引元数据自动生成，是阅读顺序建议，不是源码依赖关系的证明。"),
     }
 
 
-# 数学方法关键词 → 基础学科。用于把算法自带的 math_methods 归到「该先补什么」。
 _FOUNDATIONS = [
     ("线性代数 / Linear algebra",
      ("vector", "matrix", "matrices", "linear", "orthogonal", "eigen", "svd",
@@ -198,7 +266,7 @@ _FOUNDATIONS = [
 
 _ALGO_COLS = ("name", "module", "family", "task", "math_methods", "params",
               "docstring_math", "complexity", "start_line", "end_line",
-              "code_text", "path")
+              "code_text", "references", "path")
 
 
 def _algo_dict(row):
@@ -209,20 +277,28 @@ def _algo_dict(row):
     return d
 
 
-def _fetch_target(cur, module=None, algorithm=None):
+def _fetch_target(cur, module=None, algorithm=None, path=""):
     """定位目标实体：先按算法类名，再按成员函数名。
 
     指定了算法名却没命中时直接返回 None，不再回退到「模块里的第一个算法」——
     否则会出现用户点 A、路径却是 B 的情况。
     """
-    cols = "a." + ", a.".join(_ALGO_COLS[:-1]) + ", f.path"
+    cols = ", ".join(f"a.`{column}`" for column in _ALGO_COLS[:-1]) + ", f.path"
     if algorithm:
         tail = str(algorithm).split(".")[-1]
         for table in ("algorithms", "functions"):
+            filters = ["(a.name=%s OR a.name=%s)"]
+            values = [algorithm, tail]
+            if module:
+                filters.append("a.module=%s")
+                values.append(module)
+            if path:
+                filters.append("f.path=%s")
+                values.append(path)
             cur.execute(
                 f"SELECT {cols} FROM {table} a JOIN code_files f ON a.file_id=f.id "
-                "WHERE a.name=%s OR a.name=%s ORDER BY a.name LIMIT 1",
-                (algorithm, tail))
+                "WHERE " + " AND ".join(filters) + " ORDER BY a.name LIMIT 1",
+                tuple(values))
             row = cur.fetchone()
             if row:
                 return _algo_dict(row)
@@ -262,23 +338,25 @@ def _merge_params(stored, from_code):
 
 
 def _signature_params(code):
-    """从源码签名解析参数名：优先 __init__，其次任意 def。"""
-    lines = (code or "").splitlines()
-    for want_init in (True, False):
-        for line in lines:
-            m = re.match(r"\s*def\s+(\w+)\s*\(([^)]*)\)", line)
-            if not m:
-                continue
-            if want_init and m.group(1) != "__init__":
-                continue
-            out = []
-            for part in m.group(2).split(","):
-                name = part.strip().split("=")[0].strip().lstrip("*")
-                if name and name not in ("self", "cls") and name not in out:
-                    out.append(name)
-            if out:
-                return out
-    return []
+    """Read the selected class constructor or selected function's signature."""
+    try:
+        tree = ast.parse(textwrap.dedent(code or ""))
+    except (SyntaxError, ValueError):
+        return []
+    definitions = [node for node in tree.body
+                   if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))]
+    if not definitions:
+        return []
+    target = definitions[0]
+    if isinstance(target, ast.ClassDef):
+        target = next((node for node in target.body
+                       if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                       and node.name == "__init__"), None)
+    if target is None:
+        return []
+    arguments = list(target.args.posonlyargs) + list(target.args.args) + list(target.args.kwonlyargs)
+    arguments += [argument for argument in (target.args.vararg, target.args.kwarg) if argument]
+    return [argument.arg for argument in arguments if argument.arg not in ("self", "cls")]
 
 
 def _first_sentence(text):
@@ -372,7 +450,14 @@ def call_graph(module="", entity="", path=""):
             score += 5
         return score
 
-    candidates = sorted(rows, key=score_root, reverse=True)
+    candidates = [row for row in rows
+                  if (not module or row["module"] == module)
+                  and (not path or row["path"] == path)
+                  and (not entity or row["entity"] == entity)]
+    candidates = sorted(candidates, key=score_root, reverse=True)
+    if not candidates:
+        return {"module": module, "entity": entity, "nodes": [], "edges": [],
+                "unresolved_calls": [], "message": "Selected entity was not found in the index."}
     root = candidates[0]
     if score_root(root) == 0:
         return {"module": module, "entity": entity, "nodes": [], "edges": [],
@@ -390,9 +475,13 @@ def call_graph(module="", entity="", path=""):
         if not options:
             return None
         # Prefer same file, then same module. This reduces false cross-module links.
-        return sorted(options, key=lambda r: (
-            r["path"] != source["path"], r["module"] != source["module"], r["entity"]
-        ))[0]
+        def priority(row):
+            return (row["path"] != source["path"], row["module"] != source["module"],
+                    row["parent_class"] != source["parent_class"])
+        options = sorted(options, key=priority)
+        if len(options) > 1 and priority(options[0]) == priority(options[1]):
+            return None
+        return options[0]
 
     node_map = {}
     edges = []
@@ -431,7 +520,8 @@ def call_graph(module="", entity="", path=""):
     for caller in rows:
         if key(caller) == root_id:
             continue
-        if _call_tokens(caller) & root_names:
+        matches = _call_tokens(caller) & root_names
+        if matches and any(choose_target(symbol, caller) == root for symbol in matches):
             cid = add_node(caller, "caller")
             edge = {"source": cid, "target": root_id, "kind": "calls", "symbol": root["entity"]}
             if edge not in edges:
