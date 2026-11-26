@@ -12,6 +12,7 @@ import re
 import textwrap
 
 from backend import db
+from backend.quiz import generate_quiz
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEARN_PATH = os.path.join(REPO_ROOT, "data", "learn_content.json")
@@ -101,7 +102,7 @@ def _algorithm_detail(cur, target, include_functions=True):
             (target["module"], target["name"], target["path"]))
         functions = [{"name": row[0], "meaning": row[1] or "", "code": row[2] or ""}
                      for row in cur.fetchall()]
-    return {
+    detail = {
         "entity": target["name"], "module": target["module"],
         "family": target["family"] or "", "task": target["task"] or "",
         "math_methods": target["math_methods"],
@@ -112,6 +113,9 @@ def _algorithm_detail(cur, target, include_functions=True):
         "path": target["path"], "lines": f'{target["start_line"]}-{target["end_line"]}',
         "code": target["code_text"] or "", "functions": functions,
     }
+    if include_functions:
+        detail["quiz"] = generate_quiz(detail)
+    return detail
 
 
 def _source_signals(code):

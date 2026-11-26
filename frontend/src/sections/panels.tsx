@@ -6,6 +6,8 @@ import {
   type AlgorithmResult, type CallGraph, type LearningPath, type MemberFunction,
 } from '@/data/learning'
 import { completedCount, parseProgress, progressKey, PROGRESS_KEY, type LearningProgress } from '@/data/progress'
+import { recommendationQuery, recommendationReasons, recommendationScore, rankRecommendations } from '@/data/discovery'
+import { readApiResponse, describeApiError } from '@/data/api-errors'
 
 export type { AlgorithmResult } from '@/data/learning'
 
@@ -220,23 +222,44 @@ function ComplexityPanel({ algo }: { algo: AlgorithmResult }) {
 
 function QuizPanel({ algo }: { algo: AlgorithmResult }) {
   const [resetVersion, setResetVersion] = useState(0)
-  const questions = [
-    { question: '当前学习的是哪个算法？它位于哪个源码文件？', answer: `${algorithmName(algo)} · ${algo.path || 'Path not indexed'}:${algo.lines || '—'}` },
-    ...(algo.math_methods?.length ? [{ question: '说出一个索引中标注的数学方法或概念。', answer: algo.math_methods.join(', ') }] : []),
-    ...(algo.params?.length ? [{ question: '列举一个构造参数，并回到源码确认它的作用。', answer: `${algo.params.join(', ')}。这些是参数名，含义和默认值请核对源码。` }] : []),
-    ...(algo.functions?.length ? [{ question: '找出一个成员函数，并阅读它的实现。', answer: algo.functions.map(item => typeof item === 'string' ? item : item.name).join(', ') }] : []),
-    { question: '为什么不能用源码复杂度分数直接得出时间复杂度？', answer: '该分数仅由语法节点数与源码行数计算。Big-O 还取决于输入规模、循环上界和被调用运算的成本。' },
-  ]
+  const questions = algo.quiz || []
   return <>
-    <Notice>题目依据当前算法的索引元数据生成，用于阅读后的自测，不自动评分。请先思考，再展开参考答案。</Notice>
+    {questions.length === 0 && <Notice>当前算法没有足够的源码或元数据，暂不能生成可信题目。</Notice>}
     <div key={resetVersion} className="my-5 space-y-3">{questions.map((question, index) => <details key={question.question} className="rounded-xl border border-slate-200 bg-white/60 p-4">
-      <summary className="cursor-pointer text-sm font-medium">Q{index + 1}. {question.question}</summary><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-600">{question.answer}</p>
+      <summary className="cursor-pointer text-sm font-medium">Q{index + 1}. {question.question}</summary><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-600">{question.answer}</p><pre className="mt-3 whitespace-pre-wrap break-words text-xs text-slate-500">依据：{question.evidence}</pre>
     </details>)}</div>
     <button className={buttonClass} onClick={() => setResetVersion(version => version + 1)}>Hide all answers · 收起全部答案</button>
   </>
 }
 
-export default function ModePanel({ mode, algorithm, onSelect }: { mode: LearnMode; algorithm: AlgorithmResult; onSelect: (algorithm: AlgorithmResult) => void }) {
+function RecommendPanel({ algo, onSelect }: { algo: AlgorithmResult; onSelect: (algorithm: AlgorithmResult) => void }) {
+  const [attempt, setAttempt] = useState(0)
+  const [state, setState] = useState<{ items?: AlgorithmResult[]; error?: string; retryable?: boolean }>({})
+  useEffect(() => {
+    const controller = new AbortController()
+    setState({})
+    fetch('/api/search', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+      body: JSON.stringify({ query: recommendationQuery(algo), top_k: 10, module: '', family: '', task: '' }),
+    }).then(response => readApiResponse<{ results: AlgorithmResult[] }>(response))
+      .then(data => { if (!controller.signal.aborted) setState({ items: rankRecommendations(algo, data.results || []) }) })
+      .catch((error: unknown) => { if (!controller.signal.aborted) setState({ error: describeApiError(error).message, retryable: describeApiError(error).retryable }) })
+    return () => controller.abort()
+  }, [algo, attempt])
+  return <>
+    {state.error && <LoadError message={state.error} retryable={state.retryable} retry={() => setAttempt(value => value + 1)} />}
+    {!state.items && !state.error && <Notice>Finding related algorithms…</Notice>}
+    {state.items?.length === 0 && <Notice>没有找到其他相似算法。</Notice>}
+    <div className="mt-5 grid gap-4 sm:grid-cols-2">{state.items?.map(item => <article className="rounded-xl border border-slate-200 bg-white/60 p-4" key={`${item.module}:${item.path}:${algorithmName(item)}`}>
+      <h4 className="break-words font-semibold">{algorithmName(item)}</h4><p className={mutedClass}>{item.module} · {item.task}</p>
+      <p className="my-3 text-sm">排序分：{recommendationScore(algo, item).toFixed(3)} · {Number.isFinite(item.semantic) ? `语义分：${item.semantic!.toFixed(3)}` : '语义分未提供'}</p>
+      <p className="mb-3 text-sm">推荐依据：{recommendationReasons(algo, item).join(' · ')}</p>
+      <button className={buttonClass} onClick={() => onSelect(item)}>学习 {algorithmName(item)}</button>
+    </article>)}</div>
+  </>
+}
+
+export default function ModePanel({ mode, algorithm, onSelect, onOpenRecommendation }: { mode: LearnMode; algorithm: AlgorithmResult; onSelect: (algorithm: AlgorithmResult) => void; onOpenRecommendation: (algorithm: AlgorithmResult) => void }) {
   const resource = useLearnResource<{ algorithm: AlgorithmResult | null }>(learnUrl('algorithm', algorithm))
   if (resource.error) return <Shell><LoadError message={`算法详情加载失败：${resource.error}`} retry={resource.retry} retryable={resource.retryable} /></Shell>
   if (!resource.data) return <Shell><Notice>Loading indexed algorithm details…</Notice></Shell>
@@ -249,6 +272,7 @@ export default function ModePanel({ mode, algorithm, onSelect }: { mode: LearnMo
     {mode.id === 'call-graph' && <CallGraphPanel algo={algo} />}
     {mode.id === 'compare' && <ComparePanel algo={algo} />}
     {mode.id === 'complexity' && <ComplexityPanel algo={algo} />}
-    {mode.id === 'quiz' && <QuizPanel algo={algo} />}
+    {mode.id === 'quiz' && <QuizPanel key={`${algo.module}:${algo.path}:${algorithmName(algo)}`} algo={algo} />}
+    {mode.id === 'recommend' && <RecommendPanel key={`${algo.module}:${algo.path}:${algorithmName(algo)}`} algo={algo} onSelect={onOpenRecommendation} />}
   </Shell>
 }

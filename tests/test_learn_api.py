@@ -42,6 +42,12 @@ class LearnApiTests(unittest.TestCase):
         self.assertEqual(algorithm["module"], "trees")
         self.assertTrue(algorithm["functions"])
         self.assertTrue(algorithm["code"])
+        self.assertTrue(algorithm["quiz"])
+        self.assertTrue(any(item["kind"] == "signature" for item in algorithm["quiz"]))
+        for question in algorithm["quiz"]:
+            self.assertTrue(question["question"])
+            self.assertTrue(question["answer"])
+            self.assertTrue(question["evidence"])
         self.assertGreater(algorithm["source_signals"]["lines"], 0)
         for values in ({"module": "hmm", "algorithm": "RandomForest"},
                        {"module": "trees", "algorithm": "RandomForest", "path": "missing.py"}):

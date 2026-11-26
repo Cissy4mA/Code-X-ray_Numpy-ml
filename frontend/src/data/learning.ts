@@ -8,6 +8,9 @@ export interface MemberFunction {
 }
 
 export interface AlgorithmResult {
+  quiz?: Array<{ question: string; answer: string; evidence: string; kind?: string }>
+  semantic?: number
+  fused?: number
   entity?: string
   name?: string
   class_name?: string

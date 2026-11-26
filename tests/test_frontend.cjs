@@ -22,6 +22,44 @@ const compiled = ts.transpileModule(fs.readFileSync(path.join(root, 'frontend/sr
 const progressContext = { exports: {} }
 vm.runInNewContext(compiled, progressContext)
 const { parseProgress, progressKey, completedCount } = progressContext.exports
+const discoveryCode = ts.transpileModule(fs.readFileSync(path.join(root, 'frontend/src/data/discovery.ts'), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText
+const discoveryContext = { exports: {}, require: () => ({ algorithmName: algorithm => algorithm.entity || algorithm.name || algorithm.class_name || '' }) }
+vm.runInNewContext(discoveryCode, discoveryContext)
+const { recommendationQuery, recommendationScore, recommendationReasons, rankRecommendations } = discoveryContext.exports
+const seed = { entity: 'Forest', module: 'trees', path: 'trees/forest.py', task: 'regression', math_methods: ['Variance'] }
+assert.equal(recommendationQuery(seed), 'Forest regression Variance')
+const similar = { entity: 'Tree', module: 'trees', path: 'trees/tree.py', task: 'regression', math_methods: ['variance'], semantic: 0.4, fused: 0.4 }
+assert.equal(recommendationReasons(seed, similar).length, 3)
+assert.ok(Math.abs(recommendationScore(seed, similar) - 1.15) < 0.0001)
+const recommendations = rankRecommendations(seed, [seed, similar, { ...similar, semantic: 0.1 }, ...Array.from({ length: 9 }, (_, index) => ({ entity: `Other${index}`, semantic: 0.2 }))])
+assert.equal(recommendations.length, 6)
+assert.equal(recommendations[0].entity, 'Tree')
+assert.equal(recommendations[0].semantic, 0.4)
+assert.equal(recommendations.filter(item => item.entity === 'Tree').length, 1)
+assert.equal(rankRecommendations(seed, [seed]).length, 0)
+assert.equal(recommendationReasons({ task: 'other' }, { task: 'other' }).length, 1)
+assert.equal(recommendationScore({}, { semantic: 0, fused: 100 }), 100)
+assert.equal(recommendationScore({}, { fused: 100 }), 100)
+assert.equal(recommendationScore({}, { semantic: -0.2, fused: 100 }), 100)
+assert.equal(rankRecommendations(seed, [{ ...seed, module: 'different' }]).length, 0)
+assert.equal(rankRecommendations(seed, [{ ...seed, lines: '20-30' }]).length, 1)
+const mainReference = require('./main_recommendation_reference.cjs')
+const referenceCases = [seed, similar, {},
+  { entity: 'Family', path: 'trees/family.py', family: 'Ensemble', task: 'other', math_methods: ['A', 'B', 'C', 'D', 'E'], fused: 0.3, semantic: 0.9 },
+  { entity: 'Alias', path: 'elsewhere/alias.py', family: 'ensemble', task: 'other', math_methods: ['a', 'b', 'c', 'd', 'e'], fused: 0.9, semantic: 0.1 },
+  { entity: 'Fallback', family: 'other', math_methods: 'A; B|C', semantic: 1 },
+  { entity: 'Windows', path: 'trees\\windows.py', family: 'other', methods: ['Variance'], fused: 0 },
+]
+for (const selected of referenceCases) {
+  assert.equal(recommendationQuery(selected), mainReference.query(selected))
+  for (const candidate of referenceCases) {
+    assert.equal(recommendationScore(selected, candidate), mainReference.score(selected, candidate))
+    assert.deepEqual(Array.from(recommendationReasons(selected, candidate)), Array.from(mainReference.reasons(selected, candidate)))
+  }
+}
+assert.deepEqual(Array.from(rankRecommendations(seed, referenceCases.concat(referenceCases))).map(item => item.entity), mainReference.rank(seed, referenceCases.concat(referenceCases)).filter(item => item.entity).map(item => item.entity))
 assert.equal(Object.keys(parseProgress('{broken')).length, 0)
 assert.equal(Object.keys(parseProgress('["invalid"]')).length, 0)
 assert.equal(Object.keys(parseProgress('{"bad":3}')).length, 0)
@@ -35,7 +73,7 @@ const elements = new Map()
 function element(id) {
   if (!elements.has(id)) {
     elements.set(id, {
-      value: '', disabled: false, innerHTML: '', textContent: '', options: [], dataset: {},
+      value: '', disabled: false, innerHTML: '', textContent: '', options: [], dataset: {}, style: {},
       addEventListener() {}, querySelectorAll() { return [] }, scrollIntoView() {}, focus() {},
       querySelector() { return { addEventListener() {} } },
       appendChild(option) { this.options.push(option) },
@@ -47,7 +85,7 @@ function element(id) {
 const requests = []
 const context = {
   readApiResponse, describeApiError,
-  console, setTimeout() {}, requestAnimationFrame() {},
+  console, setTimeout() {}, requestAnimationFrame() {}, cancelAnimationFrame() {},
   matchMedia: () => ({ matches: true }), location: { hash: '' },
   document: { getElementById: element, querySelectorAll: () => [], createElement: () => ({}) },
   fetch: async (endpoint, options) => {
@@ -109,6 +147,17 @@ async function run() {
   assert.equal(element('ago').disabled, false)
   assert.match(element('score-summary').innerHTML, /1\.200/)
   assert.match(element('score-summary').innerHTML, /not probabilities/)
+  assert.match(element('bubble-field').innerHTML, /class="bubble"/)
+  assert.match(element('bubble-field').innerHTML, /data-result="0"/)
+  assert.match(element('ares').innerHTML, /id="algorithm-result-0"/)
+  context.renderBubbles([{ entity: '<img src=x>', fused: -2 }, { entity: 'B', fused: 2 }])
+  assert.match(element('bubble-field').innerHTML, /width:62px/)
+  assert.match(element('bubble-field').innerHTML, /width:136px/)
+  assert.doesNotMatch(element('bubble-field').innerHTML, /<img/)
+  context.renderBubbles([{ entity: 'Equal', fused: 1 }, { entity: 'Equal2', fused: 1 }])
+  assert.doesNotMatch(element('bubble-field').innerHTML, /NaN|Infinity/)
+  context.renderBubbles([])
+  assert.equal(element('bubble-field').hidden, true)
   assert.match(element('ares').innerHTML, /Fused \/ 融合得分/)
   assert.match(element('ares').innerHTML, /Keyword \/ 关键词得分/)
   assert.match(element('ares').innerHTML, /Semantic \/ 语义得分/)
@@ -174,6 +223,7 @@ async function run() {
   console.log('PASS: script syntax; progress validation/isolation; module-first gating; query carry-over; scoped search; unsupported algorithms; stale requests; real scores; HTML escaping.')
   console.log('PASS: standalone function results; event/timer/animation/global cleanup.')
   console.log('PASS: module reason rendering/escaping; API details; configuration/network/validation/service errors; retry classification.')
+  console.log('PASS: normalized bubble sizes/escaping/empty states; recommendation query/self-exclusion/dedup/ranking.')
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1 })

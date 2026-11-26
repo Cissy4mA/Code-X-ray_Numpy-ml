@@ -152,7 +152,10 @@ Browse 页面提供前后衔接的两步检索，而不是两种并列方法：
 - **Call Graph**：读取静态调用图，只展示可解析的索引边，另列未解析符号；不代表运行时追踪。
 - **Compare**：选择另一个同模块算法，对比真实索引字段。
 - **Complexity**：展示 AST 结构证据与索引启发式指标，不把源码评分当作 Big-O。
-- **Self-check**：基于算法元数据生成阅读自测，可展开参考答案，不自动评分。
+- **Self-check**：后端解析当前算法的 Python AST，依据真实参数及默认值、循环对象、分支行为、赋值、函数调用实参、推导式、返回表达式及数学元数据构建最多 12 道阅读自测。`/api/learn/algorithm` 的 `quiz` 字段返回题干、答案、题型和源码行号；前端只展示当前对象返回的题目，不再用正则或固定五题替代。无源码时仅使用已有元数据，信息不足则显示空状态，不编造实现细节，不调用生成模型或自动评分。
+- **Recommend**：第 8 张学习卡。按 main 的 renderRec，用当前算法的 entity、task 和前四项 math_methods 查询 `/api/search` 的 top 10，排除自身并去重，按 main 的 recommendationScore（fused + 源码同目录/算法族/任务/数学方法重合）排序，展示前 6 项与 main 同样的逐项推荐理由；点击“学习 xx”打开目标算法数学卡片。语义分单独展示，不与最终排序分混淆。
+
+Browse 的 Step 2 同时展示相关性气泡场：参考 main 的 `renderBubbles`、`.bubble` 和 `.bubble-field`，以 `fused / max(fused)` 归一化，直径为 `62 + 74 × ratio` 像素。气泡在绝对定位的场内自由运动，包含边界反弹、两两碰撞分离及悬停避让；悬停或键盘聚焦时暂停漂浮并放大 1.1 倍，点击跳转并聚焦对应结果卡。窄屏或较多结果时自动增加场高度，支持减少动态效果设置。
 
 卡牌默认不自动轮播，避免阅读时切换。检索相关性仅展示后端排序分数，不表示正确概率。
 
@@ -227,6 +230,8 @@ node tests/test_api_display.cjs
 可用 `PLAYWRIGHT_MODULE` 指定 Playwright 模块位置，`CHROME_PATH` 指定 Chrome 可执行文件，`TEST_BASE_URL` 指定网站地址（默认 `http://127.0.0.1:8000`）。测试使用隔离浏览器上下文，覆盖两阶段检索、独立函数、进度、重试、前后退和四种屏幕宽度。
 
 `test_api_display.cjs` 额外检查模块匹配理由、对比表数学说明与参考文献、缺失值及接口错误分类。异常响应和对比字段样本仅在测试浏览器中模拟，不写入数据库。
+
+`tests/test_discovery_browser.cjs` 使用模拟 API 检查气泡大小、悬停暂停与放大、跳转聚焦、响应式边界、推荐请求/去重/切换，以及不同源码生成不同自测题。先在 `frontend` 运行 `npm run build`、`npm run preview -- --host 127.0.0.1 --port 4173`，再于项目根目录运行 `node tests/test_discovery_browser.cjs`。同样支持 `PLAYWRIGHT_MODULE` 和 `CHROME_PATH`，此测试的 `TEST_BASE_URL` 默认值为 `http://127.0.0.1:4173`；不需要数据库或语义模型。
 
 向量迁移与模型身份校验的单元测试不需要下载模型，也不会修改真实数据库：
 

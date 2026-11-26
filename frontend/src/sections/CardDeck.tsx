@@ -274,6 +274,7 @@ export default function CardDeck({ modes, onActive }: Props) {
               type="button"
               onClick={() => goTo(i)}
               aria-label={`切换到 ${m.zh} / Go to ${m.en.replace('\n', ' ')}`}
+              aria-pressed={i === activeIdx}
               className="flex size-11 items-center justify-center"
             >
               <span

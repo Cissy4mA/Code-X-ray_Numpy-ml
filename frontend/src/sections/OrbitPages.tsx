@@ -203,6 +203,7 @@ const ORBIT_HTML = String.raw`
       </label></details>
       <p class="try">Refine your query to search within the selected module.</p>
       <div id="score-summary"></div>
+      <div id="bubble-field" class="bubble-field" role="group" aria-label="Algorithm relevance bubbles" hidden></div>
       <div class="results" id="ares" aria-live="polite"><div class="empty">First find and select a module. Algorithm results will appear here.</div></div>
     </section>
   </div>
@@ -619,6 +620,7 @@ function renderModules(list){
   });
 }
 function resetModuleSelection(){
+  renderBubbles([]);
   ALGO_SEARCH_VERSION++;
   var sel=document.getElementById('amod');
   sel.value='';sel.disabled=true;
@@ -666,12 +668,13 @@ function renderClasses(list,freeFunctions){
   FREE_FUNCTION_RESULTS=asList(freeFunctions);
   window.__lastAlgoResults=list.map(function(raw){return normalizeClassResult(raw)||{}}).concat(FREE_FUNCTION_RESULTS);
   renderScores(window.__lastAlgoResults);
+  renderBubbles(window.__lastAlgoResults);
   rememberSearch();
   if(!window.__lastAlgoResults.length){el.innerHTML='<div class="empty">No matching algorithms or functions. Refine your query within the selected module, or choose another module in Step 1.</div>';return;}
   el.innerHTML=window.__lastAlgoResults.map(function(c,i){
     var f=memberFunctions(c);
     var meta=scoreLine(c);
-    return '<article class="acard" style="animation-delay:'+(i*0.06)+'s">'
+    return '<article class="acard" id="algorithm-result-'+i+'" tabindex="-1" style="animation-delay:'+(i*0.06)+'s">'
       +'<div class="left"><div class="cname">'+esc(c.entity||c.name||c.class_name||'Algorithm')+'</div><span class="entity-kind">'+(c.type==='function'?'Function / 独立函数':'Class / 算法类')+'</span>'
       +'<div class="tagrow"><span class="mtag">'+esc(c.module||c.m||'module')+'</span>'+(c.family?'<span class="mtag">'+esc(c.family)+'</span>':'')+'</div>'
       +'<div class="desc2">'+esc(algoDesc(c))+'</div>'+(meta?'<div class="desc2">'+esc(meta)+'</div>':'')
@@ -692,6 +695,117 @@ function renderClasses(list,freeFunctions){
       location.hash='#/learn';
     });
   });
+}
+var bubbleState=null;
+function bubbleStop(){
+  if(bubbleState&&bubbleState.raf)window.cancelAnimationFrame(bubbleState.raf);
+  bubbleState=null;
+}
+function renderBubbles(list){
+  bubbleStop();
+  var field=document.getElementById('bubble-field');
+  if(!field)return;
+  field.innerHTML='';
+  field.hidden=!list.length;
+  if(!list.length)return;
+  var hoverScale=1.1,gap=2,hintHeight=24;
+  var scores=list.map(function(item){return Number.isFinite(item.fused)?item.fused:0});
+  var maximum=Math.max.apply(null,[0.0001].concat(scores));
+  field.innerHTML=list.map(function(item,index){
+    var ratio=Math.max(0,Math.min(1,scores[index]/maximum));
+    var size=Math.round(62+ratio*74);
+    var hue=Math.floor(Math.random()*360);
+    var name=item.entity||item.name||item.class_name||'Algorithm';
+    return '<button type="button" class="bubble" data-result="'+index+'" style="width:'+size+'px;height:'+size+'px;background:radial-gradient(circle at 32% 28%,hsl('+hue+' 92% 92%),hsl('+((hue+38)%360)+' 78% 76%));color:hsl('+hue+' 62% 26%)" aria-label="'+esc(name)+'; relevance '+scores[index].toFixed(3)+'; jump to result"><span>'+esc(name)+'<span class="bub-pct">'+Math.round(ratio*100)+'%</span></span></button>';
+  }).join('')+'<div class="bubble-dot">气泡大小 = 相关性 · 悬停停止并放大 · 点击跳转到对应结果</div>';
+  var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var state={list:[],raf:0,width:0};
+  bubbleState=state;
+  field.querySelectorAll('.bubble').forEach(function(button,index){
+    var bubble={el:button,size:Math.round(62+Math.max(0,Math.min(1,scores[index]/maximum))*74),x:0,y:0,vx:(Math.random()-0.5)*0.55||0.25,vy:(Math.random()-0.5)*0.55||0.2,scale:reduced?1:0.15,hovered:false};
+    state.list.push(bubble);
+    function pause(){bubble.hovered=true}
+    function resume(){bubble.hovered=button.matches(':hover, :focus-visible')}
+    button.addEventListener('mouseenter',pause);
+    button.addEventListener('mouseleave',resume);
+    button.addEventListener('focus',pause);
+    button.addEventListener('blur',resume);
+    button.addEventListener('click',function(){
+      var card=document.getElementById('algorithm-result-'+button.dataset.result);
+      if(card){
+        document.querySelectorAll('#ares .acard').forEach(function(result){result.classList.remove('active')});
+        card.classList.add('active');
+        card.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});
+        card.focus({preventScroll:true});
+      }
+    });
+  });
+  function layout(){
+    var width=field.clientWidth||900;
+    var cell=Math.ceil(136*hoverScale+gap+4);
+    var columns=Math.max(1,Math.floor(width/cell));
+    var rows=Math.ceil(state.list.length/columns);
+    field.style.height=Math.max(236,rows*cell+hintHeight)+'px';
+    state.width=width;
+    state.list.forEach(function(bubble,index){
+      bubble.x=(index%columns)*(width/columns)+(width/columns-bubble.size)/2;
+      bubble.y=Math.floor(index/columns)*cell+(cell-bubble.size)/2;
+    });
+  }
+  function clamp(bubble,width,floor){
+    var margin=bubble.size*(hoverScale-1)/2+2;
+    var right=Math.max(margin,width-bubble.size-margin);
+    var bottom=Math.max(margin,floor-bubble.size-margin);
+    if(bubble.x<margin){bubble.x=margin;bubble.vx=Math.abs(bubble.vx)}
+    if(bubble.y<margin){bubble.y=margin;bubble.vy=Math.abs(bubble.vy)}
+    if(bubble.x>right){bubble.x=right;bubble.vx=-Math.abs(bubble.vx)}
+    if(bubble.y>bottom){bubble.y=bottom;bubble.vy=-Math.abs(bubble.vy)}
+  }
+  function separate(width,floor){
+    for(var pass=0;pass<2;pass++){
+      state.list.forEach(function(first,index){
+        state.list.slice(index+1).forEach(function(second){
+          var deltaX=second.x+second.size/2-first.x-first.size/2;
+          var deltaY=second.y+second.size/2-first.y-first.size/2;
+          var distance=Math.hypot(deltaX,deltaY);
+          var minimum=(first.size+second.size)*hoverScale/2+gap;
+          if(distance>=minimum)return;
+          if(distance<0.01){deltaX=Math.random()-0.5;deltaY=Math.random()-0.5;distance=Math.hypot(deltaX,deltaY)||1}
+          var normalX=deltaX/distance,normalY=deltaY/distance,needed=minimum-distance;
+          var weight=first.hovered?0:second.hovered?1:0.5;
+          if(first.hovered&&second.hovered)return;
+          first.x-=normalX*needed*weight;first.y-=normalY*needed*weight;
+          second.x+=normalX*needed*(1-weight);second.y+=normalY*needed*(1-weight);
+          var firstVelocity=first.vx*normalX+first.vy*normalY;
+          var secondVelocity=second.vx*normalX+second.vy*normalY;
+          if(firstVelocity-secondVelocity>0){
+            first.vx-=(firstVelocity-secondVelocity)*normalX;first.vy-=(firstVelocity-secondVelocity)*normalY;
+            second.vx+=(firstVelocity-secondVelocity)*normalX;second.vy+=(firstVelocity-secondVelocity)*normalY;
+          }
+        });
+      });
+    }
+    state.list.forEach(function(bubble){clamp(bubble,width,floor)});
+  }
+  function step(){
+    if(bubbleState!==state)return;
+    var width=field.clientWidth||900;
+    if(width!==state.width)layout();
+    var floor=(field.clientHeight||236)-hintHeight;
+    state.list.forEach(function(bubble){
+      if(!bubble.hovered&&!reduced&&!document.hidden){bubble.x+=bubble.vx;bubble.y+=bubble.vy}
+      clamp(bubble,width,floor);
+      bubble.scale=reduced?(bubble.hovered?hoverScale:1):bubble.scale+((bubble.hovered?hoverScale:1)-bubble.scale)*0.18;
+    });
+    if(!reduced)separate(width,floor);
+    state.list.forEach(function(bubble){
+      bubble.el.style.transform='translate3d('+bubble.x.toFixed(1)+'px,'+bubble.y.toFixed(1)+'px,0) scale('+bubble.scale.toFixed(3)+')';
+      bubble.el.style.zIndex=bubble.hovered?6:2;
+    });
+    state.raf=requestAnimationFrame(step);
+  }
+  layout();
+  step();
 }
 function renderScoreBreakdown(item,list){
   var channels=[{key:'fused',label:'Fused / 融合得分'},{key:'keyword',label:'Keyword / 关键词得分'},{key:'semantic',label:'Semantic / 语义得分'}];
@@ -764,6 +878,7 @@ function runAlgoSearch(){
   if(!q){renderClasses([]);return;}
   document.getElementById('score-summary').innerHTML='';
   setBusy(document.getElementById('ares'),'Searching indexed algorithms...');
+  renderBubbles([]);
   api('/api/search',{method:'POST',body:JSON.stringify({query:q,top_k:k,module:mod,family:'',task:''})})
     .then(function(data){
       if(version!==ALGO_SEARCH_VERSION)return;

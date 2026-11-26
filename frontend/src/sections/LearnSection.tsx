@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MODES } from '@/data/learn'
 import CardDeck from '@/sections/CardDeck'
 import ModePanel, { type AlgorithmResult } from '@/sections/panels'
@@ -20,6 +20,8 @@ function OrbitMark({ className }: { className?: string }) {
 export default function LearnSection() {
   const [active, setActive] = useState(0)
   const [algorithm, setAlgorithm] = useState<AlgorithmResult | null>(null)
+  const [navigationVersion, setNavigationVersion] = useState(0)
+  const contentRef = useRef<HTMLDivElement>(null)
   const mode = MODES[active]
 
   useEffect(() => {
@@ -37,6 +39,18 @@ export default function LearnSection() {
     setAlgorithm(identity)
     try { localStorage.setItem('codexray:selectedAlgorithm', JSON.stringify(identity)) } catch { return }
   }
+
+  function openRecommendation(selected: AlgorithmResult) {
+    selectAlgorithm(selected)
+    setActive(0)
+    setNavigationVersion(version => version + 1)
+  }
+
+  useEffect(() => {
+    if (!navigationVersion) return
+    contentRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
+    contentRef.current?.focus({ preventScroll: true })
+  }, [navigationVersion])
 
   return (
     <section className="learn-page relative min-h-screen overflow-hidden pb-16">
@@ -110,12 +124,12 @@ export default function LearnSection() {
       {algorithm ? (
         <>
           {/* rotating card deck */}
-          <CardDeck modes={MODES} onActive={setActive} />
+          <CardDeck key={navigationVersion} modes={MODES} onActive={setActive} />
 
           {/* content panel, swaps with a blur-to-clear entrance */}
-          <div className="relative mx-auto mt-10 w-full max-w-6xl px-4 sm:px-6 md:mt-14">
+          <div ref={contentRef} tabIndex={-1} className="relative mx-auto mt-10 w-full max-w-6xl scroll-mt-6 px-4 outline-none sm:px-6 md:mt-14">
             <div key={`${algorithm.module}:${algorithm.path}:${algorithmName(algorithm)}`} className="panel-enter">
-              <ModePanel mode={mode} algorithm={algorithm} onSelect={selectAlgorithm} />
+              <ModePanel mode={mode} algorithm={algorithm} onSelect={selectAlgorithm} onOpenRecommendation={openRecommendation} />
             </div>
             <p className="mt-5 text-center font-mono text-[11px]" style={{ color: 'rgba(28,36,52,0.42)' }}>
               {algorithmName(algorithm)} · {algorithm.module || 'NumPy-ML'}
