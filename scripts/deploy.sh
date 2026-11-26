@@ -13,13 +13,16 @@ if [ ! -d .venv ]; then python3 -m venv .venv; fi
 . .venv/bin/activate
 
 echo "==> 2/5 安装依赖（首次含 torch，可能较慢）"
-pip install -q -r requirements.txt
+python -m pip --version >/dev/null 2>&1 || python -m ensurepip --upgrade
+python -m pip install -q -r requirements.txt
 
 echo "==> 3/5 初始化数据库表结构"
 python -c "from backend import db; db.init_db(); print('schema ready')"
 
 echo "==> 4/5 准备数据"
-if [ -f data/code_x_ray.sql ]; then
+if [ "${DB_BACKEND:-sqlite}" = "sqlite" ] && [ -f "${SQLITE_PATH:-data/code_x_ray.sqlite3}" ]; then
+  echo "    SQLite 数据库已存在：${SQLITE_PATH:-data/code_x_ray.sqlite3}，跳过重导入"
+elif [ -f data/code_x_ray.sql ]; then
   MYSQL_BIN="/Applications/XAMPP/xamppfiles/bin"
   CLI="$MYSQL_BIN/mysql"; command -v mysql >/dev/null 2>&1 && CLI="mysql"
   HOST="${MYSQL_HOST:-127.0.0.1}"; USER="${MYSQL_USER:-root}"; PORT="${MYSQL_PORT:-3306}"
@@ -31,5 +34,5 @@ else
   python -c "from backend import index_pipeline; print(index_pipeline.index_repo())"
 fi
 
-echo "==> 5/5 启动后端（http://127.0.0.1:8000）"
-exec uvicorn backend.app:app --host 0.0.0.0 --port 8000
+echo "==> 5/5 启动网站（端口 ${PORT:-8000}）"
+exec python -m uvicorn backend.app:app --host 0.0.0.0 --port "${PORT:-8000}"

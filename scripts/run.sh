@@ -6,4 +6,4 @@ cd "$(dirname "$0")/.."
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
 # shellcheck disable=SC1091
 . .venv/bin/activate
-exec uvicorn backend.app:app --host 0.0.0.0 --port 8000
+exec python -m uvicorn backend.app:app --host 0.0.0.0 --port "${PORT:-8000}"
