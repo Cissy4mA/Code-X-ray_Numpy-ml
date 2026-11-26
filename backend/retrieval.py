@@ -1,9 +1,9 @@
-"""检索核心：FULLTEXT 关键词 + 余弦语义 混合打分 → Top-K（支持 module/family/task 过滤）。
+"""Retrieval core: FULLTEXT keyword + cosine semantic hybrid scoring -> Top-K (with module/family/task filtering).
 
-这是检索精度（分工 1）的核心改动区。
-- 调 embedding 模型 / 切分策略：改 backend/parser.py 的 embed() 与 extract_chunks()
-- 调混合权重、加重排序：改本文件的 _rank()
-- 评估指标：见 tests/eval_test.py
+This is the core change area for retrieval accuracy (task 1).
+- To tune the embedding model / splitting strategy: change embed() and extract_chunks() in backend/parser.py
+- To tune hybrid weights / boost ranking: change _rank() in this file
+- Evaluation metrics: see tests/eval_test.py
 """
 import json
 import re
@@ -11,7 +11,7 @@ import re
 from backend import db, parser
 from backend.embedding_index import ensure_compatible, embed_query
 
-# 模块关键词匹配用的英文停用词（避免 of/to/the 等虚词污染名次；与代码 chunk 检索无关）
+# English stopwords for module keyword matching (avoid function words such as of/to/the polluting ranks; unrelated to code chunk retrieval)
 EN_STOP = set(
     "the a an and or but if then else of to in on at by for with from into over under "
     "is are was were be been being this that these those it its as at into about across "
@@ -21,8 +21,8 @@ EN_STOP = set(
 )
 
 
-# 查询扩展：把缩写 / 口语词映射为代码库里的标准全称，抹平词汇鸿沟（Gemini 建议 #4）。
-# 同时作用于语义向量（embed）与关键词（FULLTEXT），零额外耗时、不换模型。
+# Query expansion: map abbreviations / colloquial terms to standard full names in the codebase, bridging the vocabulary gap (Gemini suggestion #4).
+# Applies to both semantic vectors (embed) and keywords (FULLTEXT), with no extra latency and no model change.
 SYNONYMS = {
     "pca": "principal component analysis",
     "svm": "support vector machine",
@@ -38,8 +38,8 @@ SYNONYMS = {
 }
 
 
-# 仓库外算法（本仓库 numpy-ml 未收录，但名称高度标准化、常被查询）的提示词典。
-# 命中后做二次 DB 确认，确认库里确实没有才提示“未收录”，避免误伤已收录算法。
+# Hint dictionary for algorithms outside this repository (not in numpy-ml, but highly standardized and frequently queried).
+# On a match, do a second database check; only report "not in repo" if the algorithm is truly absent, to avoid false negatives for indexed algorithms.
 NOT_IN_REPO = {
     "svm": "Support Vector Machine (SVM)",
     "support vector machine": "Support Vector Machine (SVM)",
@@ -55,12 +55,12 @@ NOT_IN_REPO = {
 
 
 def detect_not_in_repo(query):
-    """若查询指向一个本仓库（numpy-ml）未收录、但广为人知的算法，返回其标准名称；否则返回 None。
+    """If the query refers to a well-known algorithm not in this repository (numpy-ml), return its standard name; otherwise return None.
 
-    判定两步走：
-      1) 词面命中 NOT_IN_REPO 词典（仅收录确定不在库中的外部算法）；
-      2) 二次确认 DB 中 algorithms / modules 的 name 确实不含该算法的核心词，
-         确认无误才提示，避免把已收录算法误判为未收录。
+    Two-step decision:
+      1) literal match against the NOT_IN_REPO dictionary (only external algorithms known to be absent);
+      2) a second database check confirming that the name fields in algorithms / modules do not contain
+         the algorithm's core term. Only report it once confirmed, to avoid misclassifying an indexed algorithm as not in repo.
     """
     q = (query or "").strip().lower()
     if not q:
@@ -72,11 +72,11 @@ def detect_not_in_repo(query):
             break
     if not matched:
         return None
-    # 二次确认：库里是否真的没有同名/近名实体
+    # Second check: is there really no entity with the same or a similar name in the database?
     core = re.sub(r"[^a-z0-9 ]", " ", q)
     core_tokens = [t for t in core.split() if len(t) >= 4]
     if not core_tokens:
-        # 缩写（svm/pca/kmeans）核心词太短，无法用 name 反查，直接信任词典
+        # Abbreviations (svm/pca/kmeans) have core terms too short for a name lookup; trust the dictionary directly
         return matched
     like = " OR ".join(["LOWER(name) LIKE %s"] * len(core_tokens))
     params = [f"%{t}%" for t in core_tokens]
@@ -95,12 +95,12 @@ def detect_not_in_repo(query):
 
 
 def _norm(s):
-    """归一化：去非字母数字、转小写，用于类名/查询的包含匹配。"""
+    """Normalize: strip non-alphanumerics, lowercase, for containment matching of class names/queries."""
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
 def expand_query(q):
-    """轻量同义词扩展：命中缩写/口语词时，把对应全称追加进查询串。"""
+    """Lightweight synonym expansion: append the full name to the query when an abbreviation/colloquial term matches."""
     q = (q or "").strip().lower()
     extra = []
     for k, v in SYNONYMS.items():
@@ -125,8 +125,9 @@ def sqlite_keyword_score(text, query):
     return score
 
 
-# 算法“昵称/黑话”→具体类名 token：口语化查询（如 q learning）直接拉满到具体算法类，
-# 既提升 FULLTEXT 关键词命中，也触发 3.2 的类名命中加权(*1.2)。补 SYNONYMS（缩写类）之外的缺口。
+# Algorithm "nicknames/slang" -> concrete class name tokens: map colloquial queries (e.g. q learning) directly to
+# concrete algorithm classes, improving FULLTEXT keyword hits and triggering the 3.2 class-name boost (*1.2).
+# Fills the gap beyond SYNONYMS (which handles abbreviations).
 NICKNAME = {
     "q learning": "dynaqgent",
     "q-learning": "dynaqgent",
@@ -137,18 +138,19 @@ NICKNAME = {
     "monte-carlo": "montecarloagent",
 }
 
-# 抽象基类 / 工具类：不是用户想要的“算法”，应在排序里降权，避免抢在具体算法前面。
-# 这些类的 docstring 描述宽泛（如 "base class for agents"），语义上极易压过具体算法。
+# Abstract base classes / utility classes: not the "algorithms" users want; downweight them in ranking so they
+# do not outrank concrete algorithms. Their docstrings are broad (e.g. "base class for agents"), so semantically
+# they can easily overwhelm concrete algorithms.
 GENERIC_CLASSES = {
     "AgentBase", "Trainer", "IHT", "MeanBaseEstimator", "LayerBase",
-    "Node", "Leaf",  # 树的内部结构节点，非用户面向的算法
+    "Node", "Leaf",  # Internal structural nodes of trees, not user-facing algorithms
 }
 
-_VOCAB = None  # 懒加载：算法/模块名拆出的词表，用于拼写纠错
+_VOCAB = None  # Lazily loaded vocabulary split from algorithm/module names, used for spell correction
 
 
 def _vocab():
-    """从库里取出所有算法/模块名，按驼峰+非字母数字拆词，构建纠错词表（进程内缓存一次）。"""
+    """Fetch all algorithm/module names from the database, split on camelCase + non-alphanumerics, and build a spell-correction vocabulary (cached once per process)."""
     global _VOCAB
     if _VOCAB is not None:
         return _VOCAB
@@ -168,7 +170,7 @@ def _vocab():
 
 
 def _edit_dist(a, b):
-    """标准 Levenshtein 编辑距离（带长度差早停）。"""
+    """Standard Levenshtein edit distance (with early stop on length difference)."""
     m, n = len(a), len(b)
     if abs(m - n) > 2:
         return 99
@@ -184,7 +186,7 @@ def _edit_dist(a, b):
 
 
 def _spell_correct(tok, vocab):
-    """对 token 做轻量拼写纠错：长度差≤2 且编辑距离≤1（长词放宽到≤2）时，映射到词表最近词。"""
+    """Lightweight spell correction for a token: map it to the nearest vocabulary word when the length differs by at most 2 and edit distance is at most 1 (at most 2 for long words)."""
     if tok in vocab or len(tok) < 4:
         return tok
     best, best_d = tok, 99
@@ -199,7 +201,7 @@ def _spell_correct(tok, vocab):
 
 
 def normalize_query(q):
-    """查询归一化：昵称/黑话展开为具体类名 token + 逐 token 拼写纠错。"""
+    """Query normalization: expand nicknames/slang into concrete class name tokens + per-token spell correction."""
     q = (q or "").strip().lower()
     extra = []
     for k, v in NICKNAME.items():
@@ -212,13 +214,13 @@ def normalize_query(q):
 
 
 def preprocess_query(q):
-    """检索统一入口：先拼写纠错+昵称展开，再做同义词(SYNONYMS)扩展。供 3.1/3.2 共用。"""
+    """Unified retrieval entry point: spell correction + nickname expansion first, then synonym (SYNONYMS) expansion. Shared by 3.1/3.2."""
     return expand_query(normalize_query(q))
 
 
 def rank(req):
-    """混合检索核心：FULLTEXT 关键词分 + 余弦语义分，归一化后 0.5/0.5 融合。
-    返回 (results, query_vector)。results 每项带 'vector'（调试用，普通搜索剔除）。"""
+    """Hybrid retrieval core: FULLTEXT keyword score + cosine semantic score, normalized then fused 0.5/0.5.
+    Returns (results, query_vector). Each result carries 'vector' (for debugging; stripped from normal search)."""
     qvec = embed_query(expand_query(req.query))
     conn = db.get_conn()
     cur = conn.cursor()
@@ -262,7 +264,7 @@ def rank(req):
                 cid, ename, parent, module, family, task = r[0], r[1], r[2], r[3], r[4], r[5]
                 rest = r[6:]
             else:
-                # algorithms 没有 parent_class，用 NULL 占位，unpack 时跳过
+                # algorithms has no parent_class; use NULL as a placeholder and skip it when unpacking
                 cid, ename, _, module, family, task = r[0], r[1], r[2], r[3], r[4], r[5]
                 parent, rest = None, r[6:]
             (math_methods, params_col, references, docstring_math, complexity,
@@ -285,7 +287,7 @@ def rank(req):
     results = _query_table("algorithms", "class", False) + _query_table("functions", "function", True)
     conn.close()
 
-    # 归一化后加权融合（各取 0.5）
+    # Weighted fusion after normalization (0.5 each)
     sem_vals = [x["semantic"] for x in results] or [0]
     kw_vals = [x["keyword"] for x in results] or [0]
     smin, smax = min(sem_vals), max(sem_vals)
@@ -299,13 +301,13 @@ def rank(req):
 
 
 def _one_line_meaning(code_text, embedding_text, docstring_math):
-    """从 chunk 的 docstring / embedding_text / docstring_math 中抽取一句可读含义，用于函数清单。"""
+    """Extract one readable meaning sentence from a chunk's docstring / embedding_text / docstring_math, for the function list."""
     if docstring_math:
         first = docstring_math.strip().splitlines()[0].strip()
         if len(first) >= 8:
             return first[:180]
     if code_text:
-        # 抽取第一个三引号 docstring 的首句（最贴近人工注释原意）
+        # Extract the first sentence of the first triple-quoted docstring (closest to the original human comment)
         for quote in ('"""', "'''"):
             start = code_text.find(quote)
             if start != -1:
@@ -318,7 +320,7 @@ def _one_line_meaning(code_text, embedding_text, docstring_math):
                         if len(sent) >= 8:
                             return sent[:180]
     if embedding_text:
-        # embedding_text 形如 "Family algorithm for task. Class name: Name. <docstring前两句>. Key parameters: ..."
+        # embedding_text looks like "Family algorithm for task. Class name: Name. <first two docstring sentences>. Key parameters: ..."
         rest = re.sub(r"^.*? algorithm for .*?\. Class name: .*?\.\s*", "", embedding_text)
         m = re.match(r"([^\.\n]{5,}?[\.!?])(?:\s|$)", rest)
         if m:
@@ -329,9 +331,9 @@ def _one_line_meaning(code_text, embedding_text, docstring_math):
 
 
 def class_search(req):
-    """3.2 新设计：只返回分类（完整算法），每个分类附带其全部成员函数。
-    游离函数（不属于任何分类）作为 'free_functions' 单独返回，仅在相关时列出。"""
-    # 默认 keyword 权重 0.2，semantic 0.8；由 eval 网格搜索确定，eval 脚本可覆盖
+    """3.2 new design: return only classes (complete algorithms), each with all its member functions.
+    Free functions (not belonging to any class) are returned separately as 'free_functions', listed only when relevant."""
+    # Default keyword weight 0.2, semantic 0.8; determined by eval grid search, overridable by eval scripts
     kw_weight = getattr(req, "kw_weight", 0.2)
     if parser.embedding_config()["backend"] == "hash" and not hasattr(req, "kw_weight"):
         kw_weight = 0.85
@@ -339,18 +341,18 @@ def class_search(req):
 
 
 def _class_search_weighted(req, kw_weight=0.2):
-    """3.2 检索内部实现，支持 keyword/semantic 融合权重调参。
+    """Internal implementation of 3.2 retrieval, supporting tuning of the keyword/semantic fusion weight.
 
-    kw_weight: keyword 通道权重；semantic 权重 = 1 - kw_weight。
+    kw_weight: weight of the keyword channel; semantic weight = 1 - kw_weight.
     """
-    # 仓库外算法：未收录提示优先于正常检索（避免返回语义替身误导用户）
+    # Algorithms outside this repository: the "not in repo" hint takes priority over normal retrieval (avoid misleading users with semantic substitutes)
     not_in = detect_not_in_repo(req.query)
     if not_in:
         return {
             "query": req.query,
             "not_in_repo": True,
             "algorithm": not_in,
-            "message": f"本仓库（numpy-ml）未收录该算法：{not_in}。",
+            "message": f"This algorithm is not in this repository (numpy-ml): {not_in}.",
             "results": [],
             "free_functions": [],
         }
@@ -422,19 +424,20 @@ def _class_search_weighted(req, kw_weight=0.2):
         sn = (x["semantic"] - smin) / (smax - smin) if smax > smin else max(0, x["semantic"])
         kn = (x["keyword"] - kmin) / (kmax - kmin) if kmax > kmin else float(x["keyword"] > 0)
         fused = kw_weight * kn + sem_weight * sn
-        # 类名命中加权（Gemini 建议 #2）：查询里出现候选类名（或反之），轻量上浮，
-        # 抑制基类/通用类抢位（如 k-means 本应落到 KMeans，而非 MeanBaseEstimator）。
+        # Class-name hit boost (Gemini suggestion #2): when a candidate class name appears in the query (or vice versa),
+        # lightly raise its rank and suppress base/generic classes from taking the top spot
+        # (e.g. k-means should land on KMeans, not MeanBaseEstimator).
         nnorm = _norm(x["entity"])
         if nnorm and (nnorm in qnorm or qnorm in nnorm):
             fused *= 1.2
-        # 基类/工具类降权：这些不是用户想要的算法，避免抢在具体算法前面（修 #12/#13/#7）
+        # Downrank base/utility classes: they are not the algorithms users want; avoid them outranking concrete algorithms (fixes #12/#13/#7)
         if x["entity"] in GENERIC_CLASSES:
             fused *= 0.85
         x["fused"] = round(fused, 4)
     results.sort(key=lambda d: d["fused"], reverse=True)
     top_classes = results[:req.top_k]
 
-    # 拉取每个分类的成员函数
+    # Fetch the member functions of each family
     for cls in top_classes:
         cur.execute(
             "SELECT name, docstring_math, embedding_text, code_text FROM functions "
@@ -446,7 +449,7 @@ def _class_search_weighted(req, kw_weight=0.2):
             for fname, fdoc, etxt, fcode in cur.fetchall()
         ]
 
-    # 游离函数：仅当与查询相关时才列出；module 过滤与分类一致
+    # Free functions: list only when relevant to the query; module filtering matches families
     free_functions = []
     free_where = "(c.parent_class IS NULL OR c.parent_class='') AND (c.module NOT IN %s OR c.module='')"
     free_params = [non_algo]
@@ -506,7 +509,7 @@ def _class_search_weighted(req, kw_weight=0.2):
             kn = (x["keyword"] - fkmin) / (fkmax - fkmin) if fkmax > fkmin else float(x["keyword"] > 0)
             x["fused"] = round(kw_weight * kn + sem_weight * sn, 4)
         free_results.sort(key=lambda d: d["fused"], reverse=True)
-        # 只保留真正相关的：关键词命中或语义分>0.3
+        # Keep only truly relevant ones: keyword hit or semantic score > 0.3
         free_functions = [
             x for x in free_results
             if x["keyword"] > 0 or x["semantic"] > 0.3
@@ -517,12 +520,12 @@ def _class_search_weighted(req, kw_weight=0.2):
 
 
 def run_search(req):
-    """3.2 前端接口：返回分类（完整算法）及每个分类的成员函数，游离函数单独列出。"""
+    """3.2 frontend endpoint: return families (full algorithms) with their member functions, and list free functions separately."""
     return class_search(req)
 
 
 def debug_chunks():
-    """像 phpMyAdmin 浏览 algorithms/functions 表一样，列出库内所有 chunk 及其向量头。"""
+    """List all chunks in the repository with their vector headers, like browsing the algorithms/functions tables in phpMyAdmin."""
     conn = db.get_conn()
     cur = conn.cursor()
     out = []
@@ -547,7 +550,7 @@ def debug_chunks():
 
 
 def debug_search(req):
-    """把一次检索拆开展示：query 向量、每个候选 chunk 的关键词分/余弦分/融合分/向量头。"""
+    """Break down a retrieval run: query vector, and each candidate chunk's keyword score / cosine score / fused score / vector header."""
     results, qvec = rank(req)
     return {
         "query": req.query,
@@ -562,10 +565,10 @@ def debug_search(req):
 
 
 # ---------------------------------------------------------------------------
-# 模块级混合检索（分工 1 · 方案 3）：关键词名次 + README 语义名次 → RRF 融合
+# Module-level hybrid retrieval (division 1, option 3): keyword ranks + README semantic ranks -> RRF fusion
 # ---------------------------------------------------------------------------
 def build_module_cards(cur, rows):
-    """把 (mid,name,family,readme,aliases) 行集补全文件数/类数/函数数/示例，返回卡片列表。"""
+    """Enrich (mid, name, family, readme, aliases) rows with file/class/function counts and examples, returning a list of cards."""
     out = []
     for mid, name, family, readme, aliases in rows:
         cur.execute("SELECT COUNT(*) FROM code_files WHERE module_id=%s", (mid,))
@@ -606,25 +609,25 @@ def build_module_cards(cur, rows):
 
 
 def module_search(req):
-    """模块级混合检索：关键词名次 + README 语义名次，RRF(k=60) 融合。
+    """Module-level hybrid retrieval: keyword ranks + README semantic ranks, fused with RRF (k=60).
 
-    流程（与前端展示的链路一致）：
-      ① query 分词 → ② 关键词名次（name/family/readme/aliases 命中）与
-         ③ 语义名次（query 向量 vs 各模块 readme_embedding 余弦）两条列表
-      ④ RRF 融合：score = Σ 1/(k+rank)，只看名次、不归一化分数、不调权重。
-    返回按 RRF 降序的模块卡片，并附带 score 与 why（命中原因）。
+    Pipeline (matching the flow shown in the frontend):
+      1) query tokenization -> 2) keyword ranks (hits in name/family/readme/aliases) and
+         3) semantic ranks (query vector vs each module's readme_embedding cosine) - two lists
+      4) RRF fusion: score = sum of 1/(k+rank); uses ranks only, no score normalization, no tuned weights.
+    Return module cards sorted by descending RRF, each with its score and why (match reason).
     """
     ensure_compatible()
     q = (req.query or "").strip().lower()
-    q_pp = preprocess_query(req.query)  # 拼写纠错 + 昵称展开 + SYNONYMS 扩展，3.2 已用，3.1 此处对齐
-    # 仓库外算法：未收录提示优先于正常检索（避免返回语义替身误导用户）
+    q_pp = preprocess_query(req.query)  # spelling correction + nickname expansion + SYNONYMS expansion; used in 3.2, aligned here for 3.1
+    # Algorithms outside the repo: the not-in-repo notice takes priority over normal retrieval (avoid misleading semantic substitutes)
     not_in = detect_not_in_repo(req.query)
     if not_in:
         return {
             "query": req.query,
             "not_in_repo": True,
             "algorithm": not_in,
-            "message": f"本仓库（numpy-ml）未收录该算法：{not_in}。",
+            "message": f"This algorithm is not in this repository (numpy-ml): {not_in}.",
             "results": [],
         }
     conn = db.get_conn()
@@ -642,17 +645,17 @@ def module_search(req):
         conn.close()
         return {"query": "", "results": cards}
 
-    # ② 关键词名次：基于英文 token + 整段别名包含匹配（带轻量单复数归一）
+    # 2) Keyword ranks: English tokens + whole-phrase alias containment matching (with light singular/plural normalization)
     q_tokens = [t for t in re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", q_pp)
                 if t not in parser.PY_STOP and t not in EN_STOP and len(t) > 1]
 
     def _kw_hit(tok, hay):
         if tok in hay:
             return True
-        # 轻量词干匹配：scale->scaling、normalize->normalization、topic->topics、
-        # cluster->clustering、regress->regression 等派生词（最长公共前缀≥4 且长度差≤4）
-        # 长度差放宽到 4 才能覆盖 normalize(9)->normalization(13) 这类差 4 的派生词。
-        # na_text/rd_text 是 JSON 字符串，单词可能带引号/标点，先剥掉再比
+        # Light stemming: scale->scaling, normalize->normalization, topic->topics,
+        # cluster->clustering, regress->regression and other derivatives (longest common prefix >= 4 and length difference <= 4)
+        # The length gap is relaxed to 4 to cover derivatives like normalize(9)->normalization(13).
+        # na_text/rd_text are JSON strings; words may carry quotes/punctuation, strip them before comparing
         if len(tok) >= 4:
             for w in hay.split():
                 w = w.strip("\"'.,;:()[]{}")
@@ -671,7 +674,7 @@ def module_search(req):
     matched_aliases = {}
     for r in rows:
         mid, name, family, readme, aliases, _ = r
-        # 名称/别名命中 = 强信号（模块“就叫这个”），README 命中 = 弱信号（长文里通用词易误命中）
+        # Name/alias hit = strong signal (the module is named this); README hit = weak signal (common words in long text easily misfire)
         na_text = " ".join([name, family or "", aliases or ""]).lower()
         rd_text = (readme or "").lower()
         try:
@@ -683,8 +686,8 @@ def module_search(req):
         na_hits = sum(1 for t in q_tokens if _kw_hit(t, na_text))
         rd_hits = sum(1 for t in q_tokens if _kw_hit(t, rd_text))
         if q_tokens:
-            # 名称/别名命中权重 ×2，README 命中 ×1；整短语别名命中是强信号，额外加权，
-            # 避免具体算法被“共享关键词”模块（如 naive bayes 被 gaussian 的 gmm 抢走）挤掉。
+            # Name/alias hits weighted x2, README hits x1; whole-phrase alias hits are a strong signal and get extra weight,
+            # preventing a specific algorithm from being pushed out by a shared-keyword module (e.g. naive bayes displaced by gaussian's gmm).
             bonus = 5.0 if ma else 0.0
             kw_scores[mid] = (2 * na_hits + rd_hits + bonus) / (2 * len(q_tokens))
         else:
@@ -693,7 +696,7 @@ def module_search(req):
                        key=lambda m: kw_scores[m], reverse=True)
     kw_rank = {m: i + 1 for i, m in enumerate(kw_ranked)}
 
-    # ③ 语义名次：query 向量 vs 各模块 README 向量余弦
+    # 3) Semantic ranks: query vector vs each module's README vector cosine
     qvec = embed_query(q_pp)
     sem_scores = {}
     for r in rows:
@@ -710,7 +713,7 @@ def module_search(req):
                         key=lambda m: sem_scores[m], reverse=True)
     sem_rank = {m: i + 1 for i, m in enumerate(sem_ranked)}
 
-    # ④ RRF 融合（k=60，Cormack et al. 2009）
+    # 4) RRF fusion (k=60, Cormack et al. 2009)
     K = 60
     rrf = {}
     for r in rows:
@@ -721,8 +724,8 @@ def module_search(req):
         if mid in sem_rank:
             s += 1.0 / (K + sem_rank[mid])
         rrf[mid] = s
-    # 整短语别名命中：决定性加权，压过语义/关键词噪声（如 naive bayes 不应被 gaussian 的 gmm 抢走）。
-    # RRF 单路最大约 1/(60+1)≈0.016，0.2 的加成足以让别名匹配模块稳居第一。
+    # Whole-phrase alias hit: decisive weighting that overrides semantic/keyword noise (e.g. naive bayes should not be displaced by gaussian's gmm).
+    # A single RRF channel maxes out around 1/(60+1) ~= 0.016, so a 0.2 bonus is enough to keep the alias-matched module firmly first.
     for r in rows:
         if matched_aliases.get(r[0]):
             rrf[r[0]] += 0.2

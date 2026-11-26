@@ -37,10 +37,10 @@ def ensure_compatible():
             if not populated:
                 return
             raise EmbeddingIndexError(
-                "索引缺少模型记录。请运行 scripts/reembed_all.py 全量重建向量索引。")
+                "The index is missing its model record. Run scripts/reembed_all.py to rebuild the full vector index.")
         if metadata.get("config") != parser.embedding_config():
             raise EmbeddingIndexError(
-                "查询模型与索引模型不一致。请恢复模型配置，或运行 scripts/reembed_all.py 全量重建索引。")
+                "The query model does not match the index model. Restore the model configuration, or run scripts/reembed_all.py to rebuild the full index.")
         return metadata
 
 
@@ -48,7 +48,7 @@ def embed_query(text):
     metadata = ensure_compatible()
     vector = parser.embed(text)
     if metadata and len(vector) != metadata.get("dimension"):
-        raise EmbeddingIndexError("查询向量维度与索引不一致，请检查模型配置并全量重建索引。")
+        raise EmbeddingIndexError("The query vector dimension does not match the index; check the model configuration and rebuild the full index.")
     return vector
 
 

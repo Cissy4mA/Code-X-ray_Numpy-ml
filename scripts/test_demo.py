@@ -1,13 +1,13 @@
-"""自动化验证脚本：跑通 入库 → 混合检索 → 带引用问答 全链路。
+"""Automated verification script: runs the full chain of indexing -> hybrid retrieval -> citation-aware Q&A.
 
-不依赖前端，直接用 urllib 调后端接口，方便确认整条链路真的通了。
-用法：code-x-ray/.venv/bin/python test_demo.py
+Does not depend on the frontend; calls backend endpoints directly via urllib to confirm the whole chain really works.
+Usage: code-x-ray/.venv/bin/python test_demo.py
 """
 import json
 import time
 import urllib.request
 
-# 直连 localhost，绕过可能存在的系统/IDE 代理，避免 localhost 请求被转发到代理而 404
+# Connect to localhost directly, bypassing possible system/IDE proxies that could forward localhost requests and cause 404
 urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler({})))
 
 BASE = "http://127.0.0.1:8000"
@@ -22,7 +22,7 @@ def _post(path, obj):
 
 
 def main():
-    # 等服务起来
+        # Wait for the service to start
     for _ in range(20):
         try:
             urllib.request.urlopen(BASE + "/api/sample", timeout=2)
@@ -30,14 +30,14 @@ def main():
         except Exception:
             time.sleep(0.5)
 
-    # 先清空，保证每次跑出来都是干净的 13 个 chunk
+        # Clear first so each run starts with a clean set of 13 chunks
     _post("/api/reset", {})
 
     sample = json.loads(urllib.request.urlopen(BASE + "/api/sample").read())
-    print("示例文件:", sample["filename"], "字符数:", len(sample["code"]))
+    print("Sample file:", sample["filename"], "chars:", len(sample["code"]))
 
     r = _post("/api/index", {"code": sample["code"], "filename": sample["filename"]})
-    print("入库结果:", r)
+    print("Index result:", r)
 
     queries = [
         "calculate order total",
@@ -47,7 +47,7 @@ def main():
     ]
     for q in queries:
         s = _post("/api/search", {"query": q, "top_k": 3})
-        print("\n=== 检索:", q, "===")
+        print("\n=== Search:", q, "===")
         for x in s["results"]:
             print(f"  fused={x['fused']} kw={x['keyword']} sem={x['semantic']}  "
                   f"{x['entity']} [{x['type']}] {x['path']}:{x['lines']}")

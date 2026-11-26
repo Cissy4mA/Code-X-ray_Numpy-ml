@@ -288,7 +288,7 @@ const ORBIT_HTML = String.raw`
     if(RM){setView(v);busy=false;if(pending){var q=pending;pending=null;go(q.v,q.x,q.y,q.noPush);}return;}
     x=(x==null)?window.innerWidth/2:x; y=(y==null)?window.innerHeight/2:y;
     var R=Math.hypot(window.innerWidth,window.innerHeight);
-    // 复位
+    // reset
     veil.style.transition='none';
     veil.style.opacity='1';
     veil.style.transform='scale(1)';
@@ -297,7 +297,7 @@ const ORBIT_HTML = String.raw`
     ring.style.opacity='0';
     ring.style.transform='scale(.2)';
     void veil.offsetWidth;
-    // 第一幕:银光盘从点击处扩散,光环扫过全屏
+    // Act 1: silver disc expands from the click point, halo sweeps the screen
     veil.style.transition='clip-path .56s cubic-bezier(.6,.05,.25,1)';
     veil.style.clipPath='circle('+(R*1.02).toFixed(0)+'px at '+x+'px '+y+'px)';
     ring.style.transition='transform .56s cubic-bezier(.6,.05,.25,1), opacity .25s ease';
@@ -307,7 +307,7 @@ const ORBIT_HTML = String.raw`
     setTimeout(function(){
       setView(v);
       ring.style.opacity='0';
-      // 第二幕:光晕绽放消散
+      // Act 2: glow blooms and fades
       setTimeout(function(){
         vlogo.style.opacity='0';
         veil.style.transition='opacity .42s ease, transform .42s ease';
@@ -395,8 +395,8 @@ const ORBIT_HTML = String.raw`
   var RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
   var DPR=Math.min(window.devicePixelRatio||1,2);
   var NATW=1627,NATH=967;
-  var MCX=1194,MCY=475,MR=318;      // 镜面圆心/半径(原图像素)
-  var TXX=886,TXY=516;              // 触点(原图像素)
+  var MCX=1194,MCY=475,MR=318;      // mirror center/radius (source image pixels)
+  var TXX=886,TXY=516;              // touch point (source image pixels)
 
   var P=[],M=[],lastT=0,pmx=0,pmy=0,parX=0,parY=0,frame2=0;
   var SPR=document.createElement('canvas'); SPR.width=SPR.height=64;
@@ -554,7 +554,7 @@ function apiError(where, err){
   var el=document.getElementById(where);
   if(!el)return;
   var problem=describeApiError(err);
-  el.innerHTML='<div class="empty" role="alert">'+esc(problem.message)+(problem.retryable?'<br><button type="button" class="sbtn retry-search">Retry / 重试</button>':'')+'</div>';
+  el.innerHTML='<div class="empty" role="alert">'+esc(problem.message)+(problem.retryable?'<br><button type="button" class="sbtn retry-search">Retry</button>':'')+'</div>';
   if(!problem.retryable)return;
   el.querySelector('.retry-search').addEventListener('click',function(){
     if(!API_READY||where==='mres')runModuleSearch();else runAlgoSearch();
@@ -675,12 +675,12 @@ function renderClasses(list,freeFunctions){
     var f=memberFunctions(c);
     var meta=scoreLine(c);
     return '<article class="acard" id="algorithm-result-'+i+'" tabindex="-1" style="animation-delay:'+(i*0.06)+'s">'
-      +'<div class="left"><div class="cname">'+esc(c.entity||c.name||c.class_name||'Algorithm')+'</div><span class="entity-kind">'+(c.type==='function'?'Function / 独立函数':'Class / 算法类')+'</span>'
+      +'<div class="left"><div class="cname">'+esc(c.entity||c.name||c.class_name||'Algorithm')+'</div><span class="entity-kind">'+(c.type==='function'?'Function':'Class')+'</span>'
       +'<div class="tagrow"><span class="mtag">'+esc(c.module||c.m||'module')+'</span>'+(c.family?'<span class="mtag">'+esc(c.family)+'</span>':'')+'</div>'
       +'<div class="desc2">'+esc(algoDesc(c))+'</div>'+(meta?'<div class="desc2">'+esc(meta)+'</div>':'')
       +renderScoreBreakdown(c,window.__lastAlgoResults)
-      +'<p class="result-taxonomy"><b>Family / 算法族:</b> '+esc(c.family||'Not indexed')+' &middot; <b>Task / 任务:</b> '+esc(c.task||'Not indexed')+'</p>'
-      +'<div class="result-source"><div class="flabel">Indexed source / 索引源码</div><pre tabindex="0" aria-label="Source code for '+esc(c.entity||c.name||'Algorithm')+'"><code>'+esc(c.code||'No source code is available in this index.')+'</code></pre></div>'
+      +'<p class="result-taxonomy"><b>Family:</b> '+esc(c.family||'Not indexed')+' &middot; <b>Task:</b> '+esc(c.task||'Not indexed')+'</p>'
+      +'<div class="result-source"><div class="flabel">Indexed source</div><pre tabindex="0" aria-label="Source code for '+esc(c.entity||c.name||'Algorithm')+'"><code>'+esc(c.code||'No source code is available in this index.')+'</code></pre></div>'
       +'<button class="learn-open" type="button" data-index="'+i+'">Open the Learn Page</button></div>'
       +'<div class="right"><div class="flabel">Member functions</div>'
       +'<div class="function-list">'+(asList(c.functions).length?asList(c.functions).map(function(fn){return '<div class="function-entry"><span class="fn">'+esc(typeof fn==='string'?fn:firstText(fn.signature,fn.name))+'</span>'+(fn&&typeof fn==='object'&&fn.meaning?'<p>'+esc(fn.meaning)+'</p>':'')+'</div>'}).join(''):(f.length?f.map(function(fn){return '<div class="function-entry"><span class="fn">'+esc(fn)+'</span></div>'}).join(''):'<span class="fn">No member functions indexed</span>'))+'</div>'
@@ -717,7 +717,7 @@ function renderBubbles(list){
     var hue=Math.floor(Math.random()*360);
     var name=item.entity||item.name||item.class_name||'Algorithm';
     return '<button type="button" class="bubble" data-result="'+index+'" style="width:'+size+'px;height:'+size+'px;background:radial-gradient(circle at 32% 28%,hsl('+hue+' 92% 92%),hsl('+((hue+38)%360)+' 78% 76%));color:hsl('+hue+' 62% 26%)" aria-label="'+esc(name)+'; relevance '+scores[index].toFixed(3)+'; jump to result"><span>'+esc(name)+'<span class="bub-pct">'+Math.round(ratio*100)+'%</span></span></button>';
-  }).join('')+'<div class="bubble-dot">气泡大小 = 相关性 · 悬停停止并放大 · 点击跳转到对应结果</div>';
+  }).join('')+'<div class="bubble-dot">Bubble size = relevance · Hover to pause and enlarge · Click to jump to the matching result</div>';
   var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var state={list:[],raf:0,width:0};
   bubbleState=state;
@@ -808,7 +808,7 @@ function renderBubbles(list){
   step();
 }
 function renderScoreBreakdown(item,list){
-  var channels=[{key:'fused',label:'Fused / 融合得分'},{key:'keyword',label:'Keyword / 关键词得分'},{key:'semantic',label:'Semantic / 语义得分'}];
+  var channels=[{key:'fused',label:'Fused'},{key:'keyword',label:'Keyword'},{key:'semantic',label:'Semantic'}];
   return '<div class="result-scores">'+channels.map(function(channel){
     var value=item[channel.key];
     if(typeof value!=='number'||!Number.isFinite(value))return '<div class="result-score"><span>'+channel.label+'</span><span class="score-value">Not available</span></div>';

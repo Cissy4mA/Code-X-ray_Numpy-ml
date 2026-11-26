@@ -1,37 +1,35 @@
-# 虚拟环境与缓存
+# Virtual environments and caches
 .venv/
 venv/
 __pycache__/
 *.pyc
 *.pyo
 
-# 密钥与环境
+# Secrets and environment
 .env
 *.local
 
-# 工具/系统
+# Tools / system
 .DS_Store
 .workbuddy/
 
-# 数据库导出 dump（体积大，按需本地生成，不进版本库）
+# Database export dumps (large, generated locally on demand, not tracked)
 data/*.sql
 data/*.sqlite3
 data/backups/
-# 随仓库提供可直接运行的 numpy-ml 演示索引
+# Bundled ready-to-run numpy-ml demo index
 !data/code_x_ray.sqlite3
 
-# 模型权重（sentence-transformers 首次运行自动下载，不进版本库）
+# Model weights (auto-downloaded by sentence-transformers on first run, not tracked)
 models/
 .cache/
 *~
 
-# 前端依赖和普通构建产物
+# Frontend dependencies and ordinary build artifacts
 node_modules/
 dist/
-# FastAPI 直接托管的正式前端构建需要进入仓库
+# The official frontend build served directly by FastAPI must be tracked
 !frontend/dist/
 !frontend/dist/**
 
-# 本地进度/文档（不进版本库，仅组长本地用）
-检索系统技术演进记录.md
-Part4功能实测清单.md
+# Local progress notes (not tracked, for the lead only)

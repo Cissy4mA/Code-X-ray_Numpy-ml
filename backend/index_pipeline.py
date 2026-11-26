@@ -1,8 +1,8 @@
-"""入库管线：粘贴代码入库 + 导入 GitHub 仓库。
+"""Indexing pipeline: index pasted code + import GitHub repositories.
 
-稳定层：负责把代码仓库解析、切分、嵌入后写入 MySQL。
-学习板块（分工 2）若需新增数据，应追加对应的数据表/JSON，不建议修改本文件，
-以免与检索精度（retrieval.py）的改动在合并时冲突。
+Stable layer: parses, splits, and embeds code repositories before writing them to MySQL.
+If the learning module (task 2) needs new data, append corresponding tables/JSON rather than
+modifying this file, so changes do not conflict with retrieval.py changes when merging.
 """
 import json
 import os
@@ -16,7 +16,7 @@ from backend.embedding_index import prepare_for_indexing
 
 
 def reset_all():
-    """清空六张表，方便反复演示/测试（demo 用，生产不需要）。"""
+    """Clear all six tables for repeated demos/testing (for demos only, not needed in production)."""
     conn = db.get_conn()
     cur = conn.cursor()
     if not db.is_sqlite():
@@ -36,14 +36,14 @@ def reset_all():
 
 
 def index_code(code, filename, module_path="", project_id=None, module_id=None):
-    """解析代码为 class / function 级 chunk，生成 embedding，写入 MySQL。返回 chunk 数。
-    若 project_id 已提供则复用该项目，否则为单个文件新建一个项目。"""
+    """Parse code into class/function-level chunks, generate embeddings, write to MySQL. Return the chunk count.
+    Reuse the project if project_id is provided; otherwise create a new project for a single file."""
     prepare_for_indexing()
     chunks = parser.extract_chunks(code, filename, module_path)
 
     conn = db.get_conn()
     cur = conn.cursor()
-    # Demo 阶段：同名文件重新入库时先清旧数据，避免重复
+    # Demo phase: clear old data first when re-indexing a file with the same name, to avoid duplicates
     cur.execute("DELETE FROM code_files WHERE path=%s", (filename,))
 
     if project_id is None:
@@ -57,8 +57,8 @@ def index_code(code, filename, module_path="", project_id=None, module_id=None):
     )
     fid = cur.lastrowid
 
-    # 跟踪「当前 class」在 algorithms 表里的 id，让 method/function 通过 class_id 指向它，
-    # 形成 modules → code_files → algorithms → functions 四层外键链。
+    # Track the id of the "current class" in the algorithms table so methods/functions point to it via class_id,
+    # forming a four-level foreign key chain: modules -> code_files -> algorithms -> functions.
     current_class_id = None
     for ch in chunks:
         vec = parser.embed(ch["embedding_text"])
@@ -77,7 +77,7 @@ def index_code(code, filename, module_path="", project_id=None, module_id=None):
             )
             current_class_id = cur.lastrowid
         else:
-            # 顶层函数没有 parent_class，class_id 留空；method 跟随所属 class。
+            # Top-level functions have no parent_class and leave class_id empty; methods follow their owning class.
             class_id = current_class_id if ch.get("parent_class") else None
             cur.execute(
                 "INSERT INTO functions(file_id,class_id,name,parent_class,module,family,task,math_methods,params,"
@@ -97,14 +97,14 @@ def index_code(code, filename, module_path="", project_id=None, module_id=None):
 
 
 def index_pasted(code, filename="pasted.py"):
-    """解析粘贴的代码为多级 chunk，生成 embedding，写入 MySQL。"""
+    """Parse pasted code into multi-level chunks, generate embeddings, write to MySQL."""
     n = index_code(code, filename)
     return {"file_id": filename, "chunks_indexed": n}
 
 
 def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master",
                reset_first=True):
-    """从 GitHub 导入仓库：git clone → 遍历 .py → 类级切分 → 嵌入 → 入库。"""
+    """Import a repository from GitHub: git clone -> walk .py files -> class-level splitting -> embedding -> indexing."""
     if reset_first:
         reset_all()
 
@@ -128,7 +128,7 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
             shutil.rmtree(tmp, ignore_errors=True)
             return {"error": "git clone timeout (>300s)"}
 
-    # 用一个项目统领整个仓库
+    # Use one project to cover the whole repository
     repo_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "") or "repo"
     conn = db.get_conn()
     cur = conn.cursor()
@@ -136,7 +136,7 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
     project_id = cur.lastrowid
     conn.close()
 
-    # 先按模块目录分组，确保每个模块在 modules 表中有一行
+    # First group by module directory to ensure each module has a row in the modules table
     module_files = defaultdict(list)
     for root, _, fns in os.walk(tmp):
         for fn in fns:
@@ -145,7 +145,7 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
             p = os.path.join(root, fn)
             rel = os.path.relpath(p, tmp)
             parts = rel.split("/")
-            # numpy-ml clone 后顶层是 Python 包目录名（numpy_ml），真正的算法子模块在下一层
+            # After cloning numpy-ml, the top level is the Python package directory (numpy_ml); the actual algorithm submodules are one level deeper
             if len(parts) >= 3 and parts[0] in ("numpy_ml", "numpy-ml"):
                 module = parts[1]
             else:
@@ -154,14 +154,14 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
                 continue
             module_files[module].append((p, rel))
 
-    # 读取仓库 README，按模块切分（无模块专属 README 时作为 fallback）
+    # Read the repository README and split it by module (fallback when no module-specific README exists)
     readme_sections = {}
     for readme_candidate in (os.path.join(tmp, "README.md"), os.path.join(tmp, "numpy_ml", "README.md")):
         readme_sections = parser.extract_module_readmes(readme_candidate)
         if readme_sections:
             break
 
-    # 模块专属 README 优先（如 numpy_ml/neural_nets/README.md），没有再 fallback 到概览
+    # Prefer module-specific READMEs (e.g. numpy_ml/neural_nets/README.md); fall back to the overview if absent
     module_readme = {}
     for module in sorted(module_files.keys()):
         if not module or module in parser.NON_ALGO_MODULES:
@@ -173,7 +173,7 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
             raw_readme = readme_sections.get(module, "")
         module_readme[module] = parser.rewrite_image_paths(raw_readme, module, repo_url, branch)
 
-    # 创建 modules 表记录（空模块名是顶层 loose 文件，不建模块行）
+    # Create modules table rows (an empty module name means top-level loose files; no module row is created)
     module_id_map = {"": None}
     conn = db.get_conn()
     cur = conn.cursor()
@@ -183,8 +183,9 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
         family = parser.FAMILY_MAP.get(module, "Other")
         readme = module_readme.get(module, "")
         aliases = parser.MODULE_ALIASES.get(module, [])
-        # 方案 3：为模块生成「富集语义向量」——name + 算法族 + 别名 + README 一起编码，
-        # 让模块级语义检索能命中别名/概念层（如 "normalize and scale features" -> preprocessing）
+        # Plan 3: generate an "enriched semantic vector" for the module - name + algorithm family + aliases
+        # + README encoded together, so module-level semantic retrieval can hit the alias/concept layer
+        # (e.g. "normalize and scale features" -> preprocessing)
         readme_vec = parser.embed_module(module, family, aliases, readme)
         if db.is_sqlite():
             cur.execute(
@@ -221,7 +222,7 @@ def index_repo(repo_url="https://github.com/ddbourgin/numpy-ml", branch="master"
                     files += 1
                     chunks += n
             except Exception:
-                # 单个文件解析失败不阻断整体导入
+                # A single file failing to parse does not block the overall import
                 continue
     if cleanup_tmp:
         shutil.rmtree(tmp, ignore_errors=True)

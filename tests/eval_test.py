@@ -1,10 +1,10 @@
 """
-Code-X-Ray: 检索系统自动化基准评测与消融实验脚本 (Task 2-3)
-完全对齐生产环境两阶段级联架构与 test_third_part 真实评测标注：
-- 冒烟测试 (Smoke Test)
-- 模块级检索定量评测 (Module Search RRF: Hit@1/3/5, MRR, Latency)
-- 两阶段级联端到端评测 (Stage 1 粗筛/OOD 拦截 -> Stage 2 模块内细查)
-- 消融实验 (Ablation Study): 严格调用生产环境 class_search，对齐线上 0.2/0.8 权重，分母严格对齐
+Code-X-Ray: Automated benchmark evaluation and ablation study for the retrieval system (Task 2-3)
+Fully aligned with the production two-stage cascade architecture and the real evaluation labels in test_third_part:
+- Smoke Test
+- Module-level retrieval evaluation (Module Search RRF: Hit@1/3/5, MRR, Latency)
+- Two-stage cascade end-to-end evaluation (Stage 1 coarse filter / OOD interception -> Stage 2 in-module fine search)
+- Ablation Study: strictly calls the production class_search, aligned with the online 0.2/0.8 weights and exact denominators
 """
 
 import copy
@@ -17,9 +17,9 @@ from backend import db, retrieval, parser
 
 
 # ---------------------------------------------------------------------------
-# 评测基准数据集 (完全复用 test_third_part.py 验证集, N=15)
+# Evaluation benchmark dataset (fully reuses the test_third_part.py validation set, N=15)
 # ---------------------------------------------------------------------------
-# 格式: (query, 3.1 模块期望, 3.2 类期望)
+# Format: (query, expected 3.1 module, expected 3.2 class)
 CASES = [
     ("svm", ("NOT_IN_REPO",), ("NOT_IN_REPO",)),
     ("pca", ("NOT_IN_REPO",), ("NOT_IN_REPO",)),
@@ -38,7 +38,7 @@ CASES = [
     ("naive bayes", ("module", "linear_models"), ("entity", "GaussianNBClassifier")),
 ]
 
-# 模块级语义检索独立测试集 (N=14)
+# Independent module-level semantic retrieval test set (N=14)
 MODULE_EVAL_QUERIES = [
     {"query": "topic modeling over documents", "module": "lda"},
     {"query": "mixture of gaussians for clustering", "module": "gmm"},
@@ -58,7 +58,7 @@ MODULE_EVAL_QUERIES = [
 
 
 class Req:
-    """对齐真实请求结构与 kw_weight 权重动态注入"""
+    """Aligns with real request structure and dynamic injection of the kw_weight parameter"""
     def __init__(self, query: str, top_k: int = 5, module: str = "", kw_weight: float = 0.2):
         self.query = query
         self.top_k = top_k
@@ -69,7 +69,7 @@ class Req:
 
 
 def _calc_latency_stats(latencies_ms: List[float]) -> Dict[str, float]:
-    """计算延迟分布指标：平均值、P50 (中位数)、P95。"""
+    """Compute latency distribution metrics: mean, P50 (median), P95."""
     if not latencies_ms:
         return {"mean": 0.0, "p50": 0.0, "p95": 0.0}
     sorted_lat = sorted(latencies_ms)
@@ -84,7 +84,7 @@ def _calc_latency_stats(latencies_ms: List[float]) -> Dict[str, float]:
 
 
 def _check_entity_match(c_item: Dict[str, Any], c_exp: Tuple) -> bool:
-    """检查单个返回结果是否命中期望类或模块"""
+    """Check whether a single returned result matches the expected class or module"""
     if c_exp[0] == "entity":
         return c_item.get("entity") == c_exp[1]
     elif c_exp[0] == "module":
@@ -93,10 +93,10 @@ def _check_entity_match(c_item: Dict[str, Any], c_exp: Tuple) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# 1. 冒烟测试
+# 1. Smoke test
 # ---------------------------------------------------------------------------
 def smoke_test():
-    """连通性冒烟测试：库能连、表有数。"""
+    """Connectivity smoke test: database connects and tables have rows."""
     out = {"db_ok": True, "error": None, "counts": {}}
     try:
         conn = db.get_conn()
@@ -115,10 +115,10 @@ def smoke_test():
 
 
 # ---------------------------------------------------------------------------
-# 2. 模块级检索评测 (Module Search RRF)
+# 2. Module-level retrieval evaluation (Module Search RRF)
 # ---------------------------------------------------------------------------
 def evaluate_modules():
-    """跑模块级评测集，记录准确率与端到端 RRF 检索耗时。"""
+    """Run the module-level evaluation set and record accuracy and end-to-end RRF retrieval latency."""
     per_query = []
     rr_sum = 0.0
     h1 = h3 = h5 = 0
@@ -174,32 +174,32 @@ def evaluate_modules():
 
 
 # ---------------------------------------------------------------------------
-# 3. 两阶段端到端级联评测 (Two-Stage Pipeline Evaluation)
+# 3. Two-stage end-to-end cascade evaluation (Two-Stage Pipeline Evaluation)
 # ---------------------------------------------------------------------------
 def evaluate_two_stage_pipeline():
     """
-    两阶段级联评测 (对接第三部分真实交互流):
-    Step 1: 调用 module_search 进行模块粗筛或 OOD 库外算法拦截。
-    Step 2: 若未收录则安全熔断；若命中模块，则带入 module 过滤条件调用 class_search。
+    Two-stage cascade evaluation (aligned with the real interaction flow in part 3):
+    Step 1: Call module_search for coarse module filtering or OOD (out-of-repo) algorithm interception.
+    Step 2: If not indexed, stop safely; if a module is matched, call class_search with the module filter applied.
     """
     per_query = []
     latencies = []
     
-    stage1_hits = 0       # 3.1 模块命中/正确拦截数
-    stage2_top1 = 0       # 3.2 类级 Top1 命中数
-    stage2_top3 = 0       # 3.2 类级 Top3 命中数
+    stage1_hits = 0       # 3.1 module hits / correct interceptions
+    stage2_top1 = 0       # 3.2 class-level Top1 hits
+    stage2_top3 = 0       # 3.2 class-level Top3 hits
     rr_sum = 0.0
     
     for q, m_exp, c_exp in CASES:
         t0 = time.perf_counter()
         
-        # 3.1: 模块检索
+        # 3.1: module retrieval
         m_resp = retrieval.module_search(Req(q, top_k=1))
         is_ood = m_resp.get("not_in_repo", False)
         m_results = m_resp.get("results", []) or []
         actual_mod = "NOT_IN_REPO" if is_ood else (m_results[0]["name"] if m_results else None)
         
-        # 3.1 验证
+        # 3.1 verification
         if m_exp[0] == "NOT_IN_REPO":
             s1_ok = is_ood
         else:
@@ -208,7 +208,7 @@ def evaluate_two_stage_pipeline():
         if s1_ok:
             stage1_hits += 1
             
-        # 3.2: 模块内类检索
+        # 3.2: in-module class retrieval
         s2_hit1 = False
         s2_hit3 = False
         rr = 0.0
@@ -272,32 +272,32 @@ def evaluate_two_stage_pipeline():
 
 
 # ---------------------------------------------------------------------------
-# 4. 消融实验套件 (Ablation Study)
+# 4. Ablation study suite (Ablation Study)
 # ---------------------------------------------------------------------------
 def run_ablation_study():
     """
-    消融实验套件：
-    严格调用真实的 class_search (retrieval.py 308-313 行)，
-    权重对齐线上 0.2/0.8 配置，分母严格使用有效样本数 N (剔除 OOD 负例)。
-    分别评估【模块内细查】与【全库裸搜】下的 Lexical / Dense / Hybrid 表现。
+    Ablation study suite:
+    Strictly calls the real class_search (retrieval.py lines 308-313),
+    weights aligned with the online 0.2/0.8 configuration, denominators use the exact valid sample count N (excluding OOD negatives).
+    Evaluates Lexical / Dense / Hybrid performance separately under in-module fine search and global unscoped search.
     """
     print("\n" + "=" * 65)
-    print("4. 消融实验评估 (Ablation Study: Lexical vs Dense vs Hybrid)")
+    print("4. Ablation study evaluation (Ablation Study: Lexical vs Dense vs Hybrid)")
     print("=" * 65)
 
-    # 剔除 OOD 负例，得到纯正例集合与准确分母
+    # Exclude OOD negatives to obtain a pure positive set and accurate denominator
     eval_cases = [(q, m_exp, c_exp) for q, m_exp, c_exp in CASES if c_exp[0] != "NOT_IN_REPO"]
     n_algo = len(eval_cases)
 
-    # 对齐线上 kw_weight 动态权重机制
+    # Align with the online dynamic kw_weight mechanism
     modes = [
         ("Lexical Only (kw=1.0)", 1.0),
         ("Dense Only (kw=0.0)", 0.0),
         ("Hybrid (Online 0.2/0.8)", 0.2),
     ]
 
-    # A. 模块内细查消融 (真实流水线阶段 3.2)
-    print(f"\n[模块内类级消融 - Module-Scoped Class Search (N={n_algo})]")
+    # A. In-module fine-search ablation (real pipeline stage 3.2)
+    print(f"\n[Module-Scoped Class Search Ablation (N={n_algo})]")
     print(f"{'Retrieval Mode':<28} | {'Hit@1':<8} | {'Hit@3':<8} | {'Hit@5':<8} | {'MRR':<8}")
     print("-" * 68)
 
@@ -319,8 +319,8 @@ def run_ablation_study():
 
         print(f"{mode_name:<28} | {h1/n_algo*100:>6.2f}% | {h3/n_algo*100:>6.2f}% | {h5/n_algo*100:>6.2f}% | {rr_sum/n_algo:>8.4f}")
 
-    # B. 全库裸搜消融 (无模块过滤，展示跨模块混淆与单阶段瓶颈)
-    print(f"\n[算法级全库裸搜消融 - Global Unscoped Class Search (N={n_algo})]")
+    # B. Global unscoped search ablation (no module filter; shows cross-module confusion and the single-stage bottleneck)
+    print(f"\n[Global Unscoped Class Search Ablation (N={n_algo})]")
     print(f"{'Retrieval Mode':<28} | {'Hit@1':<8} | {'Hit@3':<8} | {'Hit@5':<8} | {'MRR':<8}")
     print("-" * 68)
 
@@ -328,7 +328,7 @@ def run_ablation_study():
         h1 = h3 = h5 = 0
         rr_sum = 0.0
         for q, m_exp, c_exp in eval_cases:
-            req = Req(query=q, top_k=5, module="", kw_weight=kw_w)  # module 留空模拟全库无约束检索
+            req = Req(query=q, top_k=5, module="", kw_weight=kw_w)  # empty module simulates global unscoped retrieval
             results = retrieval.class_search(req).get("results", []) or []
 
             for rank_idx, item in enumerate(results[:5], start=1):
@@ -341,7 +341,7 @@ def run_ablation_study():
 
         print(f"{mode_name:<28} | {h1/n_algo*100:>6.2f}% | {h3/n_algo*100:>6.2f}% | {h5/n_algo*100:>6.2f}% | {rr_sum/n_algo:>8.4f}")
 
-    # C. 模块级宏观消融 (README Embedding vs Token vs RRF)
+    # C. Module-level macro ablation (README Embedding vs Token vs RRF)
     mod_modes = ["Lexical Only", "Dense Only", "Hybrid (RRF)"]
     mod_metrics = {m: {"hits1": 0, "hits3": 0, "hits5": 0, "rr_sum": 0.0} for m in mod_modes}
 
@@ -359,7 +359,7 @@ def run_ablation_study():
         query_text = (q["query"] or "").strip().lower()
         exp_mod = q["module"]
         
-        # 1. 词法
+        # 1. Lexical
         q_tokens = [t for t in retrieval.re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", query_text)
                     if t not in parser.PY_STOP and t not in retrieval.EN_STOP and len(t) > 1]
         kw_scores = {}
@@ -372,7 +372,7 @@ def run_ablation_study():
             kw_scores[mid] = 2 * na_hits + rd_hits
         kw_ranked_rows = sorted(rows, key=lambda r: kw_scores[r[0]], reverse=True)
 
-        # 2. 语义
+        # 2. Semantic
         qvec = parser.embed(query_text)
         sem_scores = {}
         for r in rows:
@@ -380,7 +380,7 @@ def run_ablation_study():
             sem_scores[r[0]] = parser.cosine(qvec, json.loads(emb)) if emb else -1.0
         sem_ranked_rows = sorted(rows, key=lambda r: sem_scores[r[0]], reverse=True)
 
-        # 3. 完整 RRF
+        # 3. Full RRF
         hybrid_res = retrieval.module_search(Req(q["query"], top_k=20)).get("results", []) or []
 
         for mode in mod_modes:
@@ -404,7 +404,7 @@ def run_ablation_study():
 
     conn.close()
     n_mod = len(MODULE_EVAL_QUERIES)
-    print(f"\n[模块级宏观检索消融 - Module Level (N={n_mod})]")
+    print(f"\n[Module-Level Macro Retrieval Ablation - Module Level (N={n_mod})]")
     print(f"{'Retrieval Mode':<28} | {'Hit@1':<8} | {'Hit@3':<8} | {'Hit@5':<8} | {'MRR':<8}")
     print("-" * 68)
     for m in mod_modes:
@@ -416,53 +416,53 @@ def run_ablation_study():
 
 
 # ---------------------------------------------------------------------------
-# 报告聚合输出入口
+# Report aggregation output entry point
 # ---------------------------------------------------------------------------
 def print_report():
     print("=" * 65)
-    print("1. 数据库连通性冒烟测试 (Smoke Test)")
+    print("1. Database connectivity smoke test (Smoke Test)")
     print("=" * 65)
     smoke = smoke_test()
     if smoke["db_ok"]:
-        print(f"[PASS] 数据库连接正常，数据表统计: {smoke['counts']}")
+        print(f"[PASS] Database connection OK, table statistics: {smoke['counts']}")
     else:
-        print(f"[FAIL] 数据库连接异常: {smoke['error']}")
+        print(f"[FAIL] Database connection error: {smoke['error']}")
         return
 
     print("\n" + "=" * 65)
-    print("2. 模块级混合检索评测 (Module Search RRF)")
+    print("2. Module-level hybrid retrieval evaluation (Module Search RRF)")
     print("=" * 65)
     mod_res = evaluate_modules()
-    print(f"评测样本数 (N):   {mod_res['n']}")
+    print(f"Evaluation sample count (N):   {mod_res['n']}")
     print(f"MRR:             {mod_res['MRR']:.4f}")
     print(f"Hit@1:           {mod_res['Hit@1'] * 100:.2f}%")
     print(f"Hit@3:           {mod_res['Hit@3'] * 100:.2f}%")
     print(f"Hit@5:           {mod_res['Hit@5'] * 100:.2f}%")
-    print(f"平均延迟 (Mean):  {mod_res['latency_mean_ms']} ms")
-    print(f"中位数延迟 (P50): {mod_res['latency_p50_ms']} ms")
-    print(f"高尾延迟 (P95):   {mod_res['latency_p95_ms']} ms")
+    print(f"Mean latency:  {mod_res['latency_mean_ms']} ms")
+    print(f"Median latency (P50): {mod_res['latency_p50_ms']} ms")
+    print(f"Tail latency (P95):   {mod_res['latency_p95_ms']} ms")
 
     print("\n" + "=" * 65)
-    print("3. 两阶段端到端级联评测 (Two-Stage Pipeline Evaluation)")
+    print("3. Two-stage end-to-end cascade evaluation (Two-Stage Pipeline Evaluation)")
     print("=" * 65)
     algo_res = evaluate_two_stage_pipeline()
-    print(f"评测样本数 (N):                {algo_res['n']}")
-    print(f"Stage 1 (模块初筛/OOD拦截率):  {algo_res['Stage1_Accuracy'] * 100:.2f}%")
-    print(f"Stage 2 (模块内细查 Hit@1):    {algo_res['Stage2_Hit@1'] * 100:.2f}%")
-    print(f"Stage 2 (模块内细查 Hit@3):    {algo_res['Stage2_Hit@3'] * 100:.2f}%")
+    print(f"Evaluation sample count (N):                {algo_res['n']}")
+    print(f"Stage 1 (module pre-filter / OOD intercept rate):  {algo_res['Stage1_Accuracy'] * 100:.2f}%")
+    print(f"Stage 2 (in-module fine search Hit@1):    {algo_res['Stage2_Hit@1'] * 100:.2f}%")
+    print(f"Stage 2 (in-module fine search Hit@3):    {algo_res['Stage2_Hit@3'] * 100:.2f}%")
     print(f"MRR:                           {algo_res['MRR']:.4f}")
     lat_stats = algo_res['latency_stats']
-    print(f"平均总延迟 (Mean):             {lat_stats['mean']} ms")
-    print(f"中位数延迟 (P50):              {lat_stats['p50']} ms")
-    print(f"高尾延迟 (P95):                {lat_stats['p95']} ms")
+    print(f"Mean total latency:             {lat_stats['mean']} ms")
+    print(f"Median total latency (P50):     {lat_stats['p50']} ms")
+    print(f"Tail total latency (P95):       {lat_stats['p95']} ms")
 
-    print("\n[Detail] 端到端各 Query 命中与耗时详情:")
+    print("\n[Detail] End-to-end per-query hit and latency details:")
     for pq in algo_res["per_query"]:
         mark = "✓" if pq["stage2_hit1"] else ("o" if pq["stage2_hit3"] else "x")
-        print(f"  [{mark}] Query: '{pq['query']}' (期望: {pq['expected']})")
-        print(f"      -> 命中模块: {pq['actual_mod']} | 结果: {pq['top1_result']} | MRR: {pq['mrr']} | Latency: {pq['latency_ms']} ms")
+        print(f"  [{mark}] Query: '{pq['query']}' (expected: {pq['expected']})")
+        print(f"      -> matched module: {pq['actual_mod']} | result: {pq['top1_result']} | MRR: {pq['mrr']} | Latency: {pq['latency_ms']} ms")
 
-    # 运行消融实验
+    # Run the ablation study
     run_ablation_study()
 
 

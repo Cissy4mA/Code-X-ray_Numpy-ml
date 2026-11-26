@@ -1,11 +1,11 @@
-"""Code X-Ray 后端包。
+"""Code X-Ray backend package.
 
-模块职责：
-- db.py              数据库连接与建表
-- parser.py          代码切分与 embedding
-- index_pipeline.py  入库管线（粘贴代码 / 导入 GitHub 仓库）
-- retrieval.py       检索精度（分工 1）
-- learn.py           学习板块功能（分工 2）
-- tests/eval_test.py  检索评估与测试（分工 3，亦被 app 加载提供 /api/eval 端点）
-- app.py             FastAPI 装配入口 + 元接口
+Module responsibilities:
+- db.py               database connection and table creation
+- parser.py           code splitting and embedding
+- index_pipeline.py   indexing pipeline (pasted code / import GitHub repos)
+- retrieval.py        retrieval accuracy (task 1)
+- learn.py            learning module features (task 2)
+- tests/eval_test.py  retrieval evaluation and tests (task 3; also loaded by the app to provide /api/eval endpoints)
+- app.py             FastAPI assembly entry point + meta endpoints
 """

@@ -1,4 +1,4 @@
-"""为已导入的模块回填 README 原文（不重新 embed）。"""
+"""Backfill original README text for already-imported modules (without re-embedding)."""
 import os
 import subprocess
 import tempfile

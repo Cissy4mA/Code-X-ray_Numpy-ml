@@ -171,7 +171,7 @@ export default function CardDeck({ modes, onActive }: Props) {
         className="relative mx-auto h-[300px] w-full max-w-6xl touch-pan-y select-none outline-none sm:h-[350px] md:h-[400px]"
         style={{ perspective: '1400px' }}
         role="region"
-        aria-label="学习模式卡盘 / Learning mode card deck"
+        aria-label="Learning mode card deck"
         tabIndex={0}
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
@@ -259,7 +259,7 @@ export default function CardDeck({ modes, onActive }: Props) {
         <button
           type="button"
           onClick={() => bump(-1)}
-          aria-label="上一张 / Previous"
+          aria-label="Previous"
           className="flex size-11 items-center justify-center rounded-full border border-[rgba(20,28,40,0.16)] text-[#1c2434]/70 backdrop-blur-sm transition-colors hover:border-[rgba(20,28,40,0.34)] hover:bg-white/50"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -273,7 +273,7 @@ export default function CardDeck({ modes, onActive }: Props) {
               key={m.id}
               type="button"
               onClick={() => goTo(i)}
-              aria-label={`切换到 ${m.zh} / Go to ${m.en.replace('\n', ' ')}`}
+              aria-label={`Go to ${m.en.replace('\n', ' ')}`}
               aria-pressed={i === activeIdx}
               className="flex size-11 items-center justify-center"
             >
@@ -292,7 +292,7 @@ export default function CardDeck({ modes, onActive }: Props) {
         <button
           type="button"
           onClick={() => bump(1)}
-          aria-label="下一张 / Next"
+          aria-label="Next"
           className="flex size-11 items-center justify-center rounded-full border border-[rgba(20,28,40,0.16)] text-[#1c2434]/70 backdrop-blur-sm transition-colors hover:border-[rgba(20,28,40,0.34)] hover:bg-white/50"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

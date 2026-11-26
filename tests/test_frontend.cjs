@@ -107,13 +107,13 @@ const flush = () => new Promise(resolve => setImmediate(resolve))
 async function run() {
   assert.deepEqual(await readApiResponse(new Response(JSON.stringify({ results: [] }))), { results: [] })
   for (const [status, detail, retryable, expected] of [
-    [503, '查询模型与索引模型不一致。请运行 scripts/reembed_all.py', false, /检索配置异常/],
-    [503, '查询向量维度与索引不一致，请检查模型配置并全量重建索引。', false, /检索配置异常/],
-    [503, 'Temporary test failure', true, /服务暂时不可用/],
+    [503, 'Query model and index model mismatch. Please run scripts/reembed_all.py', false, /Retrieval configuration error/],
+    [503, 'Query vector dimension does not match the index. Check the model config and rebuild the full index.', false, /Retrieval configuration error/],
+    [503, 'Temporary test failure', true, /The service is temporarily unavailable/],
     [400, 'Query is invalid', false, /Query is invalid/],
-    [403, 'Admin API is disabled', false, /访问权限/],
+    [403, 'Admin API is disabled', false, /access permissions/],
     [422, [{ msg: 'Field required' }], false, /Field required/],
-    [429, 'Rate limit', true, /请求过于频繁/],
+    [429, 'Rate limit', true, /Too many requests/],
   ]) {
     await assert.rejects(readApiResponse(new Response(JSON.stringify({ detail }), { status })), error => {
       const problem = describeApiError(error)
@@ -124,8 +124,8 @@ async function run() {
     })
   }
   await assert.rejects(readApiResponse(new Response('<html>Gateway error</html>', { status: 502 })), /HTTP 502/)
-  await assert.rejects(readApiResponse(new Response('invalid JSON')), /无法读取/)
-  assert.match(describeApiError(new TypeError('Failed to fetch')).message, /网络连接失败/)
+  await assert.rejects(readApiResponse(new Response('invalid JSON')), /unreadable data/)
+  assert.match(describeApiError(new TypeError('Failed to fetch')).message, /Network connection failed/)
   context.renderModules([{ name: 'trees', reason: '<img src=x onerror=alert(1)>', readme: 'Trees' }])
   assert.match(element('mres').innerHTML, /Why this module: &lt;img/)
   assert.doesNotMatch(element('mres').innerHTML, /<img/)
@@ -158,13 +158,13 @@ async function run() {
   assert.doesNotMatch(element('bubble-field').innerHTML, /NaN|Infinity/)
   context.renderBubbles([])
   assert.equal(element('bubble-field').hidden, true)
-  assert.match(element('ares').innerHTML, /Fused \/ 融合得分/)
-  assert.match(element('ares').innerHTML, /Keyword \/ 关键词得分/)
-  assert.match(element('ares').innerHTML, /Semantic \/ 语义得分/)
+  assert.match(element('ares').innerHTML, /Fused/)
+  assert.match(element('ares').innerHTML, /Keyword/)
+  assert.match(element('ares').innerHTML, /Semantic/)
   assert.match(element('ares').innerHTML, /3\.819/)
   assert.match(element('ares').innerHTML, /0\.390/)
   assert.match(element('ares').innerHTML, /class RandomForest:/)
-  assert.match(element('ares').innerHTML, /Task \/ 任务/)
+  assert.match(element('ares').innerHTML, /Task/)
   assert.match(element('ares').innerHTML, /regression/)
   element('mq').value = 'svm'
   context.runModuleSearch()
@@ -185,7 +185,7 @@ async function run() {
   assert.doesNotMatch(element('ares').innerHTML, /OldResult/)
   assert.equal(context.esc('"<unsafe>'), '&quot;&lt;unsafe&gt;')
   context.renderClasses([], [{ entity: 'standalone_example', type: 'function', module: 'trees', code: 'def standalone_example():\n    return 1', fused: 0.5 }])
-  assert.match(element('ares').innerHTML, /Function \/ 独立函数/)
+  assert.match(element('ares').innerHTML, /Function/)
   assert.match(element('ares').innerHTML, /def standalone_example/)
   assert.doesNotMatch(element('ares').innerHTML, /No matching algorithms/)
   const runtimeCode = ts.transpileModule(fs.readFileSync(path.join(root, 'frontend/src/data/orbit-runtime.ts'), 'utf8'), {

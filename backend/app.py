@@ -1,24 +1,24 @@
-"""Code X-Ray 后端装配入口（FastAPI）。
+"""Code X-Ray backend assembly entry point (FastAPI).
 
-职责：仅做路由装配与启动入口，不写业务逻辑。
-- 检索精度：backend/retrieval.py（分工 1）
-- 学习板块：backend/learn.py（分工 2）
-- 评估测试：tests/eval_test.py（分工 3）
-- 入库管线：backend/index_pipeline.py
-- 数据库 / 解析：backend/db.py、backend/parser.py
+Responsibilities: route assembly and startup entry only; no business logic.
+- Retrieval: backend/retrieval.py (task 1)
+- Learning module: backend/learn.py (task 2)
+- Evaluation tests: tests/eval_test.py (task 3)
+- Indexing pipeline: backend/index_pipeline.py
+- Database / parser: backend/db.py, backend/parser.py
 
-启动：在仓库根目录执行 `uvicorn backend.app:app --reload --port 8000`
+Startup: run `uvicorn backend.app:app --reload --port 8000` from the repository root
 """
 import os
 import sys
 import json
 
-# 保证无论从哪个目录启动，backend 包都可被导入
+# Ensure the backend package can be imported no matter which directory it is started from
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-# 评测模块 eval_test.py 位于 tests/，加入路径供 app 加载（提供 /api/eval 等端点）
+# The evaluation module eval_test.py lives in tests/; add it to the path so the app can load it (provides endpoints such as /api/eval)
 TESTS_DIR = os.path.join(REPO_ROOT, "tests")
 if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)
@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 from backend import db, parser
 from backend import retrieval, learn, index_pipeline
 from backend.embedding_index import EmbeddingIndexError
-import eval_test  # 评测模块位于 tests/，已加入 sys.path
+import eval_test  # The evaluation module lives in tests/ and has been added to sys.path
 
 app = FastAPI(title="Code X-Ray")
 
@@ -42,7 +42,7 @@ async def embedding_index_error(request, exc):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
-db.init_db()  # 启动时确保库表存在（含 v2 新增列）
+db.init_db()  # Ensure tables exist at startup (including new v2 columns)
 
 SAMPLE_PATH = os.path.join(REPO_ROOT, "sample", "sample_code.py")
 LEGACY_FRONTEND_PATH = os.path.join(REPO_ROOT, "frontend", "legacy-index.html")
@@ -88,7 +88,7 @@ class ModuleSearchReq(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# 基础 / 元接口
+# Basic / meta endpoints
 # ---------------------------------------------------------------------------
 @app.get("/api/sample")
 def sample():
@@ -98,7 +98,7 @@ def sample():
 
 @app.post("/api/reset")
 def reset():
-    """清空六张表，方便反复演示/测试（demo 用，生产不需要）。"""
+    """Clear all six tables for repeated demos/testing (for demos only, not needed in production)."""
     require_admin_api()
     index_pipeline.reset_all()
     return {"reset": True}
@@ -106,7 +106,7 @@ def reset():
 
 @app.get("/api/stats")
 def stats():
-    """返回当前数据库里有多少项目/文件/chunk，以及模块与算法族列表。"""
+    """Return how many projects/files/chunks are in the database, plus lists of modules and algorithm families."""
     conn = db.get_conn()
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM projects")
@@ -151,7 +151,7 @@ def stats():
 
 
 # ---------------------------------------------------------------------------
-# 入库
+# Indexing
 # ---------------------------------------------------------------------------
 @app.post("/api/index")
 def index(req: IndexReq):
@@ -166,7 +166,7 @@ def index_repo(req: IndexRepoReq):
 
 
 # ---------------------------------------------------------------------------
-# 检索（retrieval.py）
+# Retrieval (retrieval.py)
 # ---------------------------------------------------------------------------
 @app.post("/api/search")
 def search(req: SearchReq):
@@ -186,11 +186,11 @@ def debug_search(req: SearchReq):
 
 
 # ---------------------------------------------------------------------------
-# 模块列表
+# Module list
 # ---------------------------------------------------------------------------
 @app.get("/api/modules")
 def modules():
-    """返回算法模块列表（不含 tests/plots），每个模块带文件数、类数、函数数、示例算法名。"""
+    """Return the list of algorithm modules (excluding tests/plots), each with file count, class count, function count, and sample algorithm names."""
     conn = db.get_conn()
     cur = conn.cursor()
     non_algo = tuple(parser.NON_ALGO_MODULES)
@@ -203,12 +203,12 @@ def modules():
 
 @app.post("/api/modules/search")
 def modules_search(req: ModuleSearchReq):
-    """模块混合检索：关键词 + README 语义，RRF 融合（分工 1 · 方案 3）。"""
+    """Hybrid module retrieval: keywords + README semantics, fused with RRF (task 1, plan 3)."""
     return retrieval.module_search(req)
 
 
 # ---------------------------------------------------------------------------
-# 学习板块（learn.py）
+# Learning section (learn.py)
 # ---------------------------------------------------------------------------
 @app.get("/api/learn/modules")
 def learn_modules():
@@ -243,7 +243,7 @@ def learn_call_graph(module: str = "", entity: str = "", path: str = ""):
 
 
 # ---------------------------------------------------------------------------
-# 评估测试（eval_test.py）
+# Evaluation tests (eval_test.py)
 # ---------------------------------------------------------------------------
 @app.get("/api/eval")
 def eval_endpoint():
@@ -259,7 +259,7 @@ def eval_modules_endpoint():
 
 @app.get("/api/eval/class_search")
 def eval_class_search_endpoint(kw_weight: float = 0.2, top_k: int = 5):
-    """3.2 分类检索评测；kw_weight 为 keyword 通道权重，semantic = 1 - kw_weight。"""
+    """3.2 class retrieval evaluation; kw_weight is the keyword channel weight, semantic = 1 - kw_weight."""
     require_admin_api()
     return eval_test.run_ablation_study()
 
@@ -270,7 +270,7 @@ def smoke_endpoint():
 
 
 # ---------------------------------------------------------------------------
-# 前端首页
+# Frontend home page
 # ---------------------------------------------------------------------------
 @app.get("/")
 def index_page():

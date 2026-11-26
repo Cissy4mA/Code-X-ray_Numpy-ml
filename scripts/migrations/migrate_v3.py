@@ -1,16 +1,16 @@
-"""v3 迁移：把 code_chunks 里的 class/function 拆到独立的 algorithms / functions 表。
+"""v3 migration: split class/function chunks in code_chunks into separate algorithms / functions tables.
 
-运行方式：
+How to run:
     .venv/bin/python migrate_v3.py
 
-前提：
-    - code_chunks 表已完成 class_id 自引用回填（即 method 的 class_id 已指向其 class 行）。
+Prerequisites:
+        - The code_chunks table has completed the class_id self-reference backfill (i.e. method class_id points to its class row).
 
-步骤：
-    1. 清空目标表 algorithms / functions（幂等，可重跑）。
-    2. 把 chunk_type='class' 的行迁入 algorithms。
-    3. 把 chunk_type in ('function','method') 的行迁入 functions，并把 class_id 从旧 code_chunks.id
-       映射到新 algorithms.id（通过字典）。
+Steps:
+        1. Clear target tables algorithms / functions (idempotent, safe to re-run).
+        2. Migrate rows with chunk_type='class' into algorithms.
+        3. Migrate rows with chunk_type in ('function','method') into functions, and remap class_id from the old code_chunks.id
+              to the new algorithms.id (via a dictionary).
 """
 import db
 
@@ -19,13 +19,13 @@ def main():
     conn = db.get_conn()
     cur = conn.cursor()
 
-    # 幂等：先清空目标表
+        # Idempotent: clear target tables first
     cur.execute("SET FOREIGN_KEY_CHECKS=0")
     cur.execute("TRUNCATE TABLE functions")
     cur.execute("TRUNCATE TABLE algorithms")
     cur.execute("SET FOREIGN_KEY_CHECKS=1")
 
-    # 1. 迁移 class → algorithms
+        # 1. Migrate class -> algorithms
     cur.execute(
         "SELECT id,file_id,entity_name,module,family,task,math_methods,params,`references`,"
         "docstring_math,complexity,ref_edges,call_edges,start_line,end_line,"
@@ -53,7 +53,7 @@ def main():
         )
         old_to_new_alg[data["id"]] = cur.lastrowid
 
-    # 2. 迁移 function/method → functions，并重新映射 class_id
+        # 2. Migrate function/method -> functions, and remap class_id
     cur.execute(
         "SELECT id,file_id,class_id,entity_name,parent_class,module,family,task,math_methods,params,"
         "`references`,docstring_math,complexity,ref_edges,call_edges,start_line,end_line,"

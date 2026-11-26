@@ -1,14 +1,14 @@
-"""FastAPI 后端：前端 ↔ MySQL 之间的中间层，也是 RAG 的主流程。
+"""FastAPI backend: the middleware layer between the frontend and MySQL, and the main RAG flow.
 
-接口：
-  GET  /api/sample        返回示例代码
-  POST /api/index         入库粘贴代码：解析 → 多级 chunk → embedding → 写 MySQL
-  POST /api/index_repo    导入 GitHub 仓库（git clone → 遍历 .py → 类级切分 → 入库）
-  POST /api/search        检索：FULLTEXT 关键词 + 语义(余弦) 混合打分 → Top-K（支持 module/family/task 过滤）
-  POST /api/reset         清空三表
-  GET  /api/stats         返回当前数据库状态 + 模块/算法族列表
-  GET  /api/debug/chunks  列出库内所有 chunk + 向量头（RAG 版 phpMyAdmin 浏览表）
-  POST /api/debug/search  拆开一次检索：query 向量 + 每个候选的关键词/余弦/融合分
+Endpoints:
+    GET  /api/sample        Return sample code
+    POST /api/index         Ingest pasted code: parse -> multi-level chunks -> embedding -> write MySQL
+    POST /api/index_repo    Import a GitHub repo (git clone -> walk .py -> class-level split -> ingest)
+    POST /api/search        Search: FULLTEXT keyword + semantic (cosine) hybrid scoring -> Top-K (module/family/task filters supported)
+    POST /api/reset         Clear the three tables
+    GET  /api/stats         Return current DB status + module/family lists
+    GET  /api/debug/chunks  List all chunks in the DB + vector heads (RAG-version phpMyAdmin table browsing)
+    POST /api/debug/search  Break down one search: query vector + keyword/cosine/fused scores per candidate
 """
 import json
 import os
@@ -25,7 +25,7 @@ import db
 import parser
 
 app = FastAPI(title="Code X-Ray")
-db.init_db()  # 启动时确保库表存在（含 v2 新增列）
+db.init_db()  # Ensure tables exist at startup (including v2 columns)
 
 SAMPLE_PATH = os.path.join(os.path.dirname(__file__), "sample", "sample_code.py")
 
@@ -50,7 +50,7 @@ class IndexRepoReq(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# 基础接口
+# Basic endpoints
 # ---------------------------------------------------------------------------
 @app.get("/api/sample")
 def sample():
@@ -70,14 +70,14 @@ def _reset_all():
 
 @app.post("/api/reset")
 def reset():
-    """清空三张表，方便反复演示/测试（demo 用，生产不需要）。"""
+    """Clear the three tables for repeated demos/tests (for demo use, not needed in production)."""
     _reset_all()
     return {"reset": True}
 
 
 @app.get("/api/stats")
 def stats():
-    """返回当前数据库里有多少项目/文件/chunk，以及模块与算法族列表。"""
+    """Return how many projects/files/chunks are in the DB, plus module and family lists."""
     conn = db.get_conn()
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM projects")
@@ -122,16 +122,16 @@ def stats():
 
 
 # ---------------------------------------------------------------------------
-# 入库逻辑
+# Ingestion logic
 # ---------------------------------------------------------------------------
 def _index_code(code, filename, module_path="", project_id=None, module_id=None):
-    """解析代码为 class / function 级 chunk，生成 embedding，写入 MySQL。返回 chunk 数。
-    若 project_id 已提供则复用该项目，否则为单个文件新建一个项目。"""
+    """Parse code into class/function-level chunks, generate embeddings, write to MySQL. Return the chunk count.
+    If project_id is provided, reuse that project; otherwise create a new project for the single file."""
     chunks = parser.extract_chunks(code, filename, module_path)
 
     conn = db.get_conn()
     cur = conn.cursor()
-    # Demo 阶段：同名文件重新入库时先清旧数据，避免重复
+    # Demo phase: clear old data when re-ingesting a file with the same name, to avoid duplicates
     cur.execute(
         "DELETE c FROM code_chunks c JOIN code_files f ON c.file_id=f.id WHERE f.path=%s",
         (filename,),
@@ -149,8 +149,8 @@ def _index_code(code, filename, module_path="", project_id=None, module_id=None)
     )
     fid = cur.lastrowid
 
-    # 跟踪「当前 class」在 algorithms 表里的 id，让 method/function 通过 class_id 指向它，
-    # 形成 modules → code_files → algorithms → functions 四层外键链。
+    # Track the id of the current class in the algorithms table so method/function rows point to it via class_id,
+    # forming the four-level foreign-key chain modules -> code_files -> algorithms -> functions.
     current_class_id = None
     for ch in chunks:
         vec = parser.embed(ch["embedding_text"])
@@ -169,7 +169,7 @@ def _index_code(code, filename, module_path="", project_id=None, module_id=None)
             )
             current_class_id = cur.lastrowid
         else:
-            # 顶层函数没有 parent_class，class_id 留空；method 跟随所属 class。
+            # Top-level functions have no parent_class, so class_id is left empty; methods follow their owning class.
             class_id = current_class_id if ch.get("parent_class") else None
             cur.execute(
                 "INSERT INTO functions(file_id,class_id,name,parent_class,module,family,task,math_methods,params,"
@@ -190,14 +190,14 @@ def _index_code(code, filename, module_path="", project_id=None, module_id=None)
 
 @app.post("/api/index")
 def index(req: IndexReq):
-    """解析粘贴的代码为多级 chunk，生成 embedding，写入 MySQL。"""
+    """Parse pasted code into multi-level chunks, generate embeddings, write to MySQL."""
     n = _index_code(req.code, req.filename)
     return {"file_id": req.filename, "chunks_indexed": n}
 
 
 @app.post("/api/index_repo")
 def index_repo(req: IndexRepoReq):
-    """从 GitHub 导入仓库：git clone → 遍历 .py → 类级切分 → 嵌入 → 入库。"""
+    """Import a GitHub repo: git clone -> walk .py -> class-level split -> embed -> ingest."""
     if req.reset_first:
         _reset_all()
 
@@ -214,7 +214,7 @@ def index_repo(req: IndexRepoReq):
         shutil.rmtree(tmp, ignore_errors=True)
         return {"error": "git clone timeout (>300s)"}
 
-    # 用一个项目统领整个仓库
+    # Use one project to represent the whole repository
     repo_name = req.repo_url.rstrip("/").split("/")[-1].replace(".git", "") or "repo"
     conn = db.get_conn()
     cur = conn.cursor()
@@ -222,14 +222,14 @@ def index_repo(req: IndexRepoReq):
     project_id = cur.lastrowid
     conn.close()
 
-    # 读取仓库 README，按模块切分（模块搜索时原样展示 README 内容）
+    # Read the repository README and split by module (module search shows the README content verbatim)
     readme_sections = {}
     for readme_candidate in (os.path.join(tmp, "README.md"), os.path.join(tmp, "numpy_ml", "README.md")):
         readme_sections = parser.extract_module_readmes(readme_candidate)
         if readme_sections:
             break
 
-    # 先按模块目录分组，确保每个模块在 modules 表中有一行
+    # Group by module directory first, ensuring each module has a row in the modules table
     from collections import defaultdict
     module_files = defaultdict(list)
     for root, _, fns in os.walk(tmp):
@@ -239,7 +239,7 @@ def index_repo(req: IndexRepoReq):
             p = os.path.join(root, fn)
             rel = os.path.relpath(p, tmp)
             parts = rel.split("/")
-            # numpy-ml clone 后顶层是 Python 包目录名（numpy_ml），真正的算法子模块在下一层
+            # After a numpy-ml clone, the top level is the Python package directory name (numpy_ml); the real algorithm submodules are one level down
             if len(parts) >= 3 and parts[0] in ("numpy_ml", "numpy-ml"):
                 module = parts[1]
             else:
@@ -248,7 +248,7 @@ def index_repo(req: IndexRepoReq):
                 continue
             module_files[module].append((p, rel))
 
-    # 创建 modules 表记录（空模块名是顶层 loose 文件，不建模块行）
+    # Create modules table rows (an empty module name means top-level loose files; no module row is created)
     module_id_map = {"": None}
     conn = db.get_conn()
     cur = conn.cursor()
@@ -281,18 +281,18 @@ def index_repo(req: IndexRepoReq):
                     files += 1
                     chunks += n
             except Exception:
-                # 单个文件解析失败不阻断整体导入
+                # A single file parsing failure does not block the overall import
                 continue
     shutil.rmtree(tmp, ignore_errors=True)
     return {"repo": req.repo_url, "project": repo_name, "files": files, "chunks": chunks}
 
 
 # ---------------------------------------------------------------------------
-# 检索
+# Retrieval
 # ---------------------------------------------------------------------------
 def _rank(req):
-    """混合检索核心：FULLTEXT 关键词分 + 余弦语义分，归一化后 0.5/0.5 融合。
-    返回 (results, query_vector)。results 每项带 'vector'（调试用，普通搜索剔除）。"""
+    """Hybrid retrieval core: FULLTEXT keyword score + cosine semantic score, normalized then fused 0.5/0.5.
+    Returns (results, query_vector). Each result carries 'vector' (for debugging, stripped in normal searches)."""
     qvec = parser.embed(req.query)
     conn = db.get_conn()
     cur = conn.cursor()
@@ -330,7 +330,7 @@ def _rank(req):
                 cid, ename, parent, module, family, task = r[0], r[1], r[2], r[3], r[4], r[5]
                 rest = r[6:]
             else:
-                # algorithms 没有 parent_class，用 NULL 占位，unpack 时跳过
+                # algorithms have no parent_class, use NULL as a placeholder and skip during unpack
                 cid, ename, _, module, family, task = r[0], r[1], r[2], r[3], r[4], r[5]
                 parent, rest = None, r[6:]
             (math_methods, params_col, references, docstring_math, complexity,
@@ -353,7 +353,7 @@ def _rank(req):
     results = _query_table("algorithms", "class", False) + _query_table("functions", "function", True)
     conn.close()
 
-    # 归一化后加权融合（各取 0.5）
+    # Weighted fusion after normalization (0.5 each)
     sem_vals = [x["semantic"] for x in results] or [0]
     kw_vals = [x["keyword"] for x in results] or [0]
     smin, smax = min(sem_vals), max(sem_vals)
@@ -370,13 +370,13 @@ def _rank(req):
 def search(req: SearchReq):
     results, _ = _rank(req)
     for x in results:
-        x.pop("vector", None)  # 普通搜索不暴露完整向量
+        x.pop("vector", None)  # Normal searches do not expose the full vector
     return {"query": req.query, "results": results[: req.top_k]}
 
 
 @app.get("/api/debug/chunks")
 def debug_chunks():
-    """像 phpMyAdmin 浏览 algorithms/functions 表一样，列出库内所有 chunk 及其向量头。"""
+    """List all chunks in the DB + vector heads, like browsing algorithms/functions tables in phpMyAdmin."""
     conn = db.get_conn()
     cur = conn.cursor()
     out = []
@@ -402,7 +402,7 @@ def debug_chunks():
 
 @app.post("/api/debug/search")
 def debug_search(req: SearchReq):
-    """把一次检索拆开展示：query 向量、每个候选 chunk 的关键词分/余弦分/融合分/向量头。"""
+    """Break down one search: query vector, and each candidate chunk's keyword/cosine/fused scores and vector head."""
     results, qvec = _rank(req)
     return {
         "query": req.query,
@@ -418,7 +418,7 @@ def debug_search(req: SearchReq):
 
 @app.get("/api/modules")
 def modules():
-    """返回算法模块列表（不含 tests/plots），每个模块带文件数、类数、函数数、示例算法名。"""
+    """Return the algorithm module list (excluding tests/plots); each module has file/class/function counts and sample algorithm names."""
     conn = db.get_conn()
     cur = conn.cursor()
     non_algo = tuple(parser.NON_ALGO_MODULES)
@@ -451,7 +451,7 @@ def modules():
     return {"modules": out}
 
 
-# 前端首页：直接返回 index.html。前端通过 fetch 调 /api/* 接口，与后端同源，无需 CORS。
+# Frontend home: return index.html directly. The frontend calls /api/* via fetch, same origin as the backend, so no CORS is needed.
 @app.get("/")
 def index_page():
     return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "index.html"))

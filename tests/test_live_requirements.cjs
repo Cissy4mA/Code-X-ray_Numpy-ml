@@ -62,9 +62,9 @@ async function run() {
     await page.locator('.learn-open').first().click()
     const selected = (await (await details).json()).algorithm
     await page.getByRole('heading', { name: selected.entity, exact: true }).waitFor()
-    assert.equal(await page.getByRole('button', { name: /^切换到 / }).count(), 8)
+    assert.equal(await page.getByRole('button', { name: /^Go to / }).count(), 8)
     const recommendationResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/search')
-    await page.getByRole('button', { name: '切换到 相似推荐 / Go to Recommend', exact: true }).click()
+    await page.getByRole('button', { name: 'Go to Recommend', exact: true }).click()
     const response = await recommendationResponse
     assert.equal(response.status(), 200)
     const request = response.request().postDataJSON()
@@ -79,16 +79,16 @@ async function run() {
     await page.waitForFunction(count => document.querySelectorAll('.learn-glass article').length === count, expected.length)
     assert.deepEqual(await cards.locator('h4').allTextContents(), expected.map(item => item.entity))
     for (let index = 0; index < expected.length; index++) {
-      assert.match(await cards.nth(index).innerText(), /推荐依据：/)
+      assert.match(await cards.nth(index).innerText(), /Why recommended:/)
       for (const reason of mainReference.reasons(selected, expected[index])) assert.ok((await cards.nth(index).innerText()).includes(reason))
       const text = await cards.nth(index).innerText()
-      const shownScore = Number(text.match(/排序分：(-?[\d.]+)/)?.[1])
+      const shownScore = Number(text.match(/Ranking score: (-?[\d.]+)/)?.[1])
       assert.ok(Math.abs(shownScore - expectedScore(selected, expected[index])) <= 0.00051, JSON.stringify({ text, expected: expectedScore(selected, expected[index]), candidate: expected[index].entity }))
     }
     await page.locator('.learn-glass').scrollIntoViewIfNeeded()
     await page.screenshot({ path: path.join(output, '02-recommend.png'), fullPage: true })
 
-    await page.getByRole('button', { name: '切换到 理解自测 / Go to Self-check', exact: true }).click()
+    await page.getByRole('button', { name: 'Go to Self-check', exact: true }).click()
     assert.ok(selected.quiz.length > 0)
     const questions = page.locator('.learn-glass details')
     await page.waitForFunction(count => document.querySelectorAll('.learn-glass details').length === count, selected.quiz.length)
@@ -102,11 +102,11 @@ async function run() {
     await page.locator('.learn-glass').scrollIntoViewIfNeeded()
     await page.screenshot({ path: path.join(output, '03-quiz.png'), fullPage: true })
     if (expected.length) {
-      await page.getByRole('button', { name: '切换到 相似推荐 / Go to Recommend', exact: true }).click()
-      await page.getByRole('button', { name: `学习 ${expected[0].entity}`, exact: true }).click()
+      await page.getByRole('button', { name: 'Go to Recommend', exact: true }).click()
+      await page.getByRole('button', { name: `Study ${expected[0].entity}`, exact: true }).click()
       await page.getByRole('heading', { name: expected[0].entity, exact: true }).waitFor()
-      await page.getByRole('heading', { name: 'Mathematical context · 数学背景', exact: true }).waitFor()
-      assert.equal(await page.getByRole('button', { name: '切换到 数学卡片 / Go to Math Card', exact: true }).getAttribute('aria-pressed'), 'true')
+      await page.getByRole('heading', { name: 'Mathematical context', exact: true }).waitFor()
+      assert.equal(await page.getByRole('button', { name: 'Go to Math Card', exact: true }).getAttribute('aria-pressed'), 'true')
       const selectedAfter = JSON.parse(await page.evaluate(() => localStorage.getItem('codexray:selectedAlgorithm')))
       assert.equal(selectedAfter.entity, expected[0].entity)
       assert.equal(selectedAfter.path, expected[0].path)

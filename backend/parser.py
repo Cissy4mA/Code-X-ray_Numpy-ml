@@ -1,18 +1,18 @@
-"""代码解析 + 可插拔 Embedding（v2：ML 算法类级切分）。
+"""Code parsing + pluggable embedding (v2: ML algorithm class-level splitting).
 
-- 切分：module / class / function / method 四级；class 级为 ML 算法主单元
-- 每个 chunk 抽取：
-    module       仓库内顶层目录（如 neural_nets）
-    family       算法族（Neural Networks / Tree-based / ...）
-    task         任务类型（classification / regression / ...）
-    math_methods 从 docstring 抽取的数学方法标签
-    params       __init__ 参数 schema
-    references   参考文献（Bishop 2006 等）
-    docstring_math 结构化数学描述（目标函数 / 假设）
-    complexity   复杂度启发式
-    ref_edges    引用边：基类 / import
-    call_edges   调用边：方法内调用的符号
-- embedding：优先调用 OpenAI-compatible API；无 key 则本地 sentence-transformers（默认）
+- Splitting: four levels - module / class / function / method; class level is the main unit for ML algorithms
+- Each chunk extracts:
+    module        top-level directory in the repository (e.g. neural_nets)
+    family        algorithm family (Neural Networks / Tree-based / ...)
+    task          task type (classification / regression / ...)
+    math_methods  math method tags extracted from the docstring
+    params        __init__ parameter schema
+    references    references (e.g. Bishop 2006)
+    docstring_math structured math description (objective function / assumptions)
+    complexity    complexity heuristic
+    ref_edges     reference edges: base classes / imports
+    call_edges    call edges: symbols called inside methods
+- embedding: prefer an OpenAI-compatible API; without a key, use local sentence-transformers (default)
 """
 import ast
 import re
@@ -30,9 +30,9 @@ PY_STOP = set(
     "zip map filter open read write close super object init new call".split()
 )
 
-DIM = 384  # all-MiniLM-L6-v2 输出维度；API embedding 维度由模型决定
+DIM = 384  # all-MiniLM-L6-v2 output dimension; API embedding dimension is determined by the model
 
-# 仓库顶层目录 -> 算法族（numpy-ml 目录结构）
+# Repository top-level directories -> algorithm families (numpy-ml directory structure)
 FAMILY_MAP = {
     "neural_nets": "Neural Networks",
     "trees": "Tree-based Models",
@@ -55,70 +55,70 @@ FAMILY_MAP = {
     "docs": "Documentation",
 }
 
-# 不参与检索/统计的非算法目录（测试、绘图）
+# Non-algorithm directories excluded from retrieval/statistics (tests, plots)
 NON_ALGO_MODULES = {"tests", "plots"}
 
-# 13 个算法模块的「全称 / 缩写 / 中英文别名」，入库时写入 modules.aliases，
-# 模块搜索时一并匹配，解决「只认缩写、不认全称 / 初学者看不懂缩写」的问题。
+# Full names / abbreviations / English aliases for the 13 algorithm modules, written to modules.aliases at
+# indexing time and matched during module search, so both full names and abbreviations are recognized.
 MODULE_ALIASES = {
     "bandits": [
         "Bandits", "Multi-armed Bandits", "MAB", "Contextual Bandits",
-        "多臂老虎机", "多臂赌博机", "强盗算法", "老虎机问题",
+        "Multi-armed Bandit", "Multi-armed Bandit Problem", "Bandit Algorithm", "Bandit Problem",
     ],
     "factorization": [
         "Matrix Factorization", "Factorization Machines", "MF", "FM",
-        "矩阵分解", "分解机", "矩阵分解机",
+        "Matrix Factorization Model", "Factorization Machine", "Matrix Factorization Machine",
     ],
     "gmm": [
         "Gaussian Mixture Model", "Gaussian Mixture Models", "GMM",
-        "Mixture of Gaussians", "Mixture of Gaussian", "高斯混合模型", "高斯混合",
+        "Mixture of Gaussians", "Mixture of Gaussian", "Gaussian Mixture Modeling", "Gaussian Mixture",
     ],
     "hmm": [
         "Hidden Markov Model", "Hidden Markov Models", "HMM",
-        "隐马尔可夫模型", "隐马尔可夫", "隐马模型",
+        "Hidden Markov Modeling", "Hidden Markov", "Hidden Markov Chain",
     ],
     "lda": [
         "Latent Dirichlet Allocation", "LDA", "Topic Model", "Topic Models",
-        "主题模型", "隐含狄利克雷分布", "潜在狄利克雷分配",
+        "Topic Modeling", "Latent Dirichlet Distribution", "Latent Dirichlet Allocation Model",
     ],
     "linear_models": [
         "Linear Models", "Generalized Linear Models", "GLM",
         "Linear Regression", "Logistic Regression", "Ridge Regression", "Lasso",
-        "Naive Bayes", "Gaussian Naive Bayes", "GaussianNB", "朴素贝叶斯",
-        "线性回归", "逻辑回归", "岭回归", "套索回归", "线性模型", "广义线性模型",
+        "Naive Bayes", "Gaussian Naive Bayes", "GaussianNB", "Naive Bayes Classifier",
+        "Linear Regression Model", "Logistic Regression Model", "Ridge Regression Model", "Lasso Regression", "Linear Model", "Generalized Linear Model",
     ],
     "neural_nets": [
         "Neural Networks", "Neural Network", "Deep Learning", "Deep Neural Network",
-        "DNN", "NN", "Feedforward Network", "人工神经网络",
-        "神经网络", "深度学习", "深度神经网络", "前馈神经网络",
+        "DNN", "NN", "Feedforward Network", "Artificial Neural Network",
+        "Neural Net", "Deep Learning Models", "Deep Neural Networks", "Feedforward Neural Network",
     ],
     "ngram": [
         "N-Gram", "N-Grams", "N-Gram Language Model", "Ngram", "Ngrams",
-        "N元文法", "N元语法", "语言模型", "n元模型",
+        "N-Gram Grammar", "N-Gram Model", "Language Model", "N-Gram Language Modeling",
     ],
     "nonparametric": [
         "Nonparametric Models", "Non-parametric Models", "Nonparametric", "Kernel Density Estimation",
-        "KDE", "核密度估计", "非参数模型", "非参数方法",
+        "KDE", "Kernel Density Estimator", "Nonparametric Model", "Nonparametric Method",
     ],
     "preprocessing": [
         "Preprocessing", "Data Preprocessing", "Feature Scaling", "Normalization",
-        "Standardization", "Min-Max Scaling", "数据预处理", "特征缩放", "标准化", "归一化",
+        "Standardization", "Min-Max Scaling", "Data Preprocessing Pipeline", "Feature Scaling and Normalization", "Z-score Normalization", "Min-Max Normalization",
     ],
     "rl_models": [
         "Reinforcement Learning", "RL", "Agents", "Markov Decision Process", "MDP",
-        "强化学习", "智能体", "强化学习智能体", "马尔可夫决策过程",
+        "Reinforcement Learning Models", "Agent", "Reinforcement Learning Agent", "Markov Decision Processes",
     ],
     "trees": [
         "Decision Trees", "Random Forest", "Gradient Boosted Trees", "GBDT",
-        "XGBoost", "CART", "决策树", "随机森林", "梯度提升树", "梯度提升决策树",
+        "XGBoost", "CART", "Decision Tree", "Random Forests", "Gradient Boosting Trees", "Gradient Boosted Decision Trees",
     ],
     "utils": [
         "Utilities", "Utils", "Helper Functions", "Utility Functions",
-        "工具函数", "辅助函数", "工具模块",
+        "Utility Function", "Helper Function", "Utility Module",
     ],
 }
 
-# numpy-ml README.md 中“Available models”标题 -> 模块目录名
+# "Available models" headings in numpy-ml README.md -> module directory names
 README_MODULE_MAP = {
     "gaussian mixture model": "gmm",
     "hidden markov model": "hmm",
@@ -135,7 +135,7 @@ README_MODULE_MAP = {
     "utilities": "utils",
 }
 
-# 数学方法词典（小写匹配 docstring / code）
+# Math method dictionary (lowercase matching against docstring / code)
 MATH_TERMS = [
     "expectation-maximization", "em algorithm", "gaussian", "multivariate normal",
     "normal distribution", "bayesian", "markov", "monte carlo", "gibbs sampling",
@@ -161,17 +161,17 @@ KNOWN_AUTHORS = [
 
 
 # -----------------------------------------------------------------------------
-# 1. 代码切分 + 元数据抽取
+# 1. Code splitting + metadata extraction
 # -----------------------------------------------------------------------------
 def extract_chunks(source, filename="pasted.py", module_path=""):
-    """把源码切成 module / class / function / method 四级 chunk，并抽取 ML 元数据。"""
+    """Split source code into four-level chunks - module / class / function / method - and extract ML metadata."""
     chunks = []
     lines = source.splitlines()
     total_lines = len(lines)
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        # 非 Python / 语法损坏，退化为整文件 module chunk
+        # Non-Python / broken syntax: fall back to a whole-file module chunk
         family = FAMILY_MAP.get(module_path, "Other")
         return [{
             "chunk_type": "module", "entity_name": filename, "parent_class": None,
@@ -189,7 +189,7 @@ def extract_chunks(source, filename="pasted.py", module_path=""):
     import_names = _collect_import_names(tree)
     family = FAMILY_MAP.get(module_path, "Other")
 
-    # 只保留有意义的 class / function 级单元；文件级 module chunk 和 __init__ 方法跳过
+    # Keep only meaningful class/function-level units; skip file-level module chunks and __init__ methods
     for node in tree.body:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             continue
@@ -219,7 +219,7 @@ def extract_chunks(source, filename="pasted.py", module_path=""):
             }
             chunks.append(chunk)
 
-            # 3) class 内部的方法（__init__ 跳过，参数已抽到 class chunk 的 params）
+            # 3) methods inside a class (skip __init__; its parameters were extracted into the class chunk's params)
             for child in node.body:
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name != "__init__":
                     cs, ce = child.lineno, child.end_lineno
@@ -277,7 +277,7 @@ def _init_params(cls_node):
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "__init__":
             try:
                 args = [a.arg for a in n.args.args if a.arg != "self"]
-                # 带上默认值提示
+                # Include default value hints
                 out = []
                 defaults = n.args.defaults
                 n_pos = len(n.args.args) - len(defaults)
@@ -383,9 +383,9 @@ def call_names(node):
 
 
 def _build_summary(name, family, task, doc, params):
-    """构造用于 embedding 的自然语言摘要（而非原始代码），提升语义检索精度。"""
+    """Build a natural-language summary for embedding (rather than raw code) to improve semantic retrieval accuracy."""
     head = f"{family} algorithm for {task}. Class name: {name}."
-    # docstring 前两句
+    # First two sentences of the docstring
     doc1 = ""
     if doc:
         parts = re.split(r"(?<=[.!?])\s+", doc.strip())
@@ -395,11 +395,11 @@ def _build_summary(name, family, task, doc, params):
 
 
 # -----------------------------------------------------------------------------
-# 2. README 分段：把 numpy_ml/README.md 里“Available models”的编号列表
-#    按模块目录名切分，供模块搜索时原样展示（不生成摘要）。
+# 2. README sections: split the numbered "Available models" list in numpy_ml/README.md
+#    by module directory name, for verbatim display during module search (no summary generated).
 # -----------------------------------------------------------------------------
 def extract_module_readmes(readme_path):
-    """返回 {module_name: markdown_section_text}。"""
+    """Return {module_name: markdown_section_text}."""
     if not os.path.isfile(readme_path):
         return {}
     text = open(readme_path, encoding="utf-8", errors="replace").read()
@@ -415,7 +415,7 @@ def extract_module_readmes(readme_path):
             if current_module and current_lines:
                 sections[current_module] = "\n".join(current_lines).strip()
             heading = m.group(1).lower()
-            # 去掉括号注释，如 "latent dirichlet allocation (topic model)"
+            # Remove parenthetical notes, e.g. "latent dirichlet allocation (topic model)"
             heading = heading.split("(")[0].strip()
             current_module = README_MODULE_MAP.get(heading)
             current_lines = [line.strip()]
@@ -427,7 +427,7 @@ def extract_module_readmes(readme_path):
 
 
 def rewrite_image_paths(readme: str, module: str, repo_url: str, branch: str = "master") -> str:
-    """把模块 README 里的相对图片路径改写成 GitHub raw 绝对路径，避免前端展示破图。"""
+    """Rewrite relative image paths in module READMEs to absolute GitHub raw URLs, to avoid broken images in the frontend."""
     base = repo_url.rstrip("/")
     if base.endswith(".git"):
         base = base[:-4]
@@ -475,7 +475,7 @@ def rewrite_image_paths(readme: str, module: str, repo_url: str, branch: str = "
 
 
 # -----------------------------------------------------------------------------
-# 3. Embedding：API 优先，本地 sentence-transformers 兜底（默认）
+# 3. Embedding: API first, with local sentence-transformers as fallback (default)
 # -----------------------------------------------------------------------------
 _MODEL = None
 _MODEL_CONFIG = None
@@ -528,7 +528,7 @@ def _get_model():
 
 
 def embed(text):
-    """使用显式配置的同一模型生成单位向量。"""
+    """Generate a unit vector using the same explicitly configured model."""
     config = embedding_config()
     if config["backend"] == "hash":
         return _embed_hash(text)
@@ -560,11 +560,12 @@ def normalize_vector(vector):
 
 
 def module_embed_text(name, family, aliases, readme):
-    """构造「模块级」语义向量用的富集文本：名称 + 算法族 + 别名 + README。
+    """Build the enriched text used for the "module-level" semantic vector: name + algorithm family + aliases + README.
 
-    别名是模块的「概念锚点」（如 preprocessing 的 Normalization / Feature Scaling /
-    Standardization），只拿 README 编码会让「normalize and scale features」这类自然语言
-    查询语义上找不到 preprocessing。把别名编进来后，语义检索才能命中模块的概念层。
+    Aliases are the module's "concept anchors" (e.g. Normalization / Feature Scaling /
+    Standardization for preprocessing). Encoding only the README would leave natural-language
+    queries such as "normalize and scale features" unable to find preprocessing semantically.
+    Encoding the aliases lets semantic retrieval hit the module's concept layer.
     """
     alias_str = " ".join(aliases) if isinstance(aliases, list) else (aliases or "")
     parts = [name, family or "", alias_str, (readme or "")[:3500]]
@@ -572,7 +573,7 @@ def module_embed_text(name, family, aliases, readme):
 
 
 def embed_module(name, family, aliases, readme):
-    """模块级语义向量：name + 算法族 + 别名 + README 富集后编码。"""
+    """Module-level semantic vector: name + algorithm family + aliases + README, enriched then encoded."""
     return embed(module_embed_text(name, family, aliases, readme))
 
 
@@ -582,7 +583,7 @@ def tokenize(text):
 
 
 def _embed_hash(text):
-    """显式演示模式：稳定的 token 哈希，没有语义能力。"""
+    """Explicit demo mode: stable token hashing with no semantic capability."""
     vec = [0.0] * DIM
     for t in tokenize(text):
         h = int.from_bytes(hashlib.sha256(t.encode("utf-8")).digest()[:8], "big")
@@ -595,14 +596,14 @@ def _embed_hash(text):
 
 
 def cosine(a, b):
-    """两个归一化向量的点积即余弦相似度。"""
+    """The dot product of two normalized vectors is their cosine similarity."""
     if not a or len(a) != len(b):
         raise ValueError("Embedding dimensions differ; rebuild the complete index")
     return sum(x * y for x, y in zip(a, b))
 
 
 def _embed_api(text, key):
-    """调用 OpenAI-compatible Embedding API（OpenAI / 智谱 / 千问 / 本地 vLLM 等）。"""
+    """Call an OpenAI-compatible embedding API (OpenAI / Zhipu / Qwen / local vLLM, etc.)."""
     base = os.environ.get("EMBEDDING_BASE_URL", "https://api.openai.com/v1")
     model = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small")
     body = json.dumps({
@@ -622,4 +623,4 @@ def _embed_api(text, key):
             data = json.loads(resp.read().decode("utf-8"))
         return data["data"][0]["embedding"]
     except Exception as e:
-        raise RuntimeError(f"Embedding API 调用失败（model={model}, base={base}）: {e}")
+        raise RuntimeError(f"Embedding API call failed (model={model}, base={base}): {e}")

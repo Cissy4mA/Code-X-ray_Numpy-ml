@@ -1,6 +1,6 @@
-"""3.2 分类检索 keyword/semantic 融合权重网格搜索。
+"""3.2 class-retrieval keyword/semantic fusion weight grid search.
 
-用法（在项目根目录、激活虚拟环境后）：
+Usage (from project root, with the virtual environment activated):
     python scripts/sweep_class_weight.py
 """
 import sys
@@ -10,7 +10,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-# 评测模块已移至 tests/，加入路径后导入
+# The evaluation module has moved to tests/; add it to the path before importing
 TESTS_DIR = os.path.join(REPO_ROOT, "tests")
 if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)

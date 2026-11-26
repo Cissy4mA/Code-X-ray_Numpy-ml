@@ -23,7 +23,7 @@ function Notice({ children, error = false }: { children: ReactNode; error?: bool
 }
 
 function LoadError({ message, retry, retryable = true }: { message: string; retry: () => void; retryable?: boolean }) {
-  return <Notice error>{message}{retryable && <button className={`${buttonClass} ml-3`} onClick={retry}>Retry / 重试</button>}</Notice>
+  return <Notice error>{message}{retryable && <button className={`${buttonClass} ml-3`} onClick={retry}>Retry</button>}</Notice>
 }
 
 function Heading({ children }: { children: ReactNode }) {
@@ -58,8 +58,8 @@ function MathCardPanel({ algo }: { algo: AlgorithmResult }) {
   const resource = useLearnResource<{ cards: CuratedCard[] }>(learnUrl('card', algo))
   const cards = resource.data?.cards || []
   return <>
-    <Heading>Mathematical context · 数学背景</Heading>
-    {resource.error && <LoadError message={`数学卡片加载失败：${resource.error} 仍可查看下方的源码文档。`} retry={resource.retry} retryable={resource.retryable} />}
+    <Heading>Mathematical context</Heading>
+    {resource.error && <LoadError message={`Math card failed to load: ${resource.error} You can still view the source documentation below.`} retry={resource.retry} retryable={resource.retryable} />}
     {!resource.data && !resource.error && <Notice>Loading curated math cards…</Notice>}
     {cards.map((card, index) => <article key={index} className="my-4 rounded-xl border border-slate-200 bg-white/60 p-4">
       <h5 className="font-semibold">{card.title || card.algorithm || algorithmName(algo)}</h5>
@@ -67,12 +67,12 @@ function MathCardPanel({ algo }: { algo: AlgorithmResult }) {
       <pre className="mt-3 whitespace-pre-wrap break-words text-sm">{card.formula || card.formulas?.join('\n')}</pre>
       {card.references?.length ? <TextList items={card.references} /> : null}
     </article>)}
-    <div className="grid gap-6 md:grid-cols-2"><section><Heading>Indexed mathematical methods · 数学标签</Heading><TextList items={algo.math_methods || []} /></section>
-      <section><Heading>Constructor parameters · 参数</Heading><TextList items={algo.params || []} /></section></div>
-    <Heading>Indexed documentation · 源码文档</Heading>
+    <div className="grid gap-6 md:grid-cols-2"><section><Heading>Indexed mathematical methods</Heading><TextList items={algo.math_methods || []} /></section>
+      <section><Heading>Constructor parameters</Heading><TextList items={algo.params || []} /></section></div>
+    <Heading>Indexed documentation</Heading>
     <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-white/60 p-4 text-sm leading-7">{algo.docstring_math || 'No mathematical description is available in the index.'}</pre>
-    <Heading>References · 参考文献</Heading><TextList items={algo.references || []} />
-    <details className="mt-6 rounded-xl border border-slate-200 p-4"><summary className="cursor-pointer text-sm font-medium">View indexed source · 查看源码</summary>
+    <Heading>References</Heading><TextList items={algo.references || []} />
+    <details className="mt-6 rounded-xl border border-slate-200 p-4"><summary className="cursor-pointer text-sm font-medium">View indexed source</summary>
       <pre className="mt-4 max-h-96 overflow-auto text-xs leading-6">{algo.code || 'No source is indexed.'}</pre></details>
   </>
 }
@@ -92,7 +92,7 @@ function PathPanel({ algo, onSelect }: { algo: AlgorithmResult; onSelect: (algor
     window.addEventListener('storage', syncProgress)
     return () => window.removeEventListener('storage', syncProgress)
   }, [])
-  if (resource.error) return <LoadError message={`学习路径加载失败：${resource.error}`} retry={resource.retry} retryable={resource.retryable} />
+  if (resource.error) return <LoadError message={`Learning path failed to load: ${resource.error}`} retry={resource.retry} retryable={resource.retryable} />
   if (!resource.data) return <Notice>Loading the reading path for this algorithm…</Notice>
   const data = resource.data
   if (!data.steps.length) return <Notice>{data.note || 'No reading path is available for this algorithm.'}</Notice>
@@ -107,12 +107,12 @@ function PathPanel({ algo, onSelect }: { algo: AlgorithmResult; onSelect: (algor
   const roadmap = data.roadmap || []
   const finished = roadmap.filter(item => completedCount(progress, progressKey(data.module, item.name, item.path), kinds) === kinds.length).length
   return <>
-    <Notice>根据算法信息整理的阅读建议，可按需调整顺序。</Notice>
-    <details className="mt-3 text-sm text-slate-500"><summary className="cursor-pointer">路径说明</summary><p className="mt-2 leading-6">路径依据数学标签、所属模块和源码信息生成，不代表已验证的先修依赖关系。</p></details>
-    <div className="my-5 flex flex-wrap items-center gap-3"><span className="text-sm">已读 {completed}/{data.steps.length} 步</span>
+    <Notice>Reading suggestions organized from algorithm information; the order can be adjusted as needed.</Notice>
+    <details className="mt-3 text-sm text-slate-500"><summary className="cursor-pointer">About this path</summary><p className="mt-2 leading-6">The path is generated from math tags, module membership, and source information; it does not represent verified prerequisite dependencies.</p></details>
+    <div className="my-5 flex flex-wrap items-center gap-3"><span className="text-sm">Read {completed}/{data.steps.length} steps</span>
       <progress aria-label="Algorithm reading progress" max={data.steps.length} value={completed} className="h-2 min-w-24 flex-1 accent-slate-700" />
-      <button className={buttonClass} onClick={() => save({ ...progress, [key]: [] })}>Reset progress · 重置进度</button></div>
-    {storageError && <Notice error>浏览器无法保存进度；当前会话仍可勾选，但刷新后可能丢失。</Notice>}
+      <button className={buttonClass} onClick={() => save({ ...progress, [key]: [] })}>Reset progress</button></div>
+    {storageError && <Notice error>This browser could not save progress; you can still check items in this session, but they may be lost after refresh.</Notice>}
     <ol className="space-y-3">{data.steps.map(step => <li key={step.kind} className="rounded-xl border border-slate-200 bg-white/50 p-4">
       <label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1 size-4 accent-slate-700" checked={(progress[key] || []).includes(step.kind)} onChange={event => {
         const current = progress[key] || []
@@ -121,12 +121,12 @@ function PathPanel({ algo, onSelect }: { algo: AlgorithmResult; onSelect: (algor
       <p className={`mb-3 mt-2 ${mutedClass}`}>{step.detail}</p>
       <TextList items={step.items.map(item => `${item.name}: ${item.note}`)} empty="No additional items for this step." />
     </li>)}</ol>
-    <Heading>Module roadmap · 模块阅读列表</Heading>
-    <p className={mutedClass}>按名称排序，不表示难度或先修顺序。模块已完成 {finished}/{roadmap.length} 个算法；点击切换学习目标。</p>
+    <Heading>Module roadmap</Heading>
+    <p className={mutedClass}>Sorted by name, not by difficulty or prerequisite order. {finished}/{roadmap.length} algorithms completed in this module; click to switch the learning target.</p>
     <div className="mt-3 grid gap-2 sm:grid-cols-2">{roadmap.map(item => {
       const count = completedCount(progress, progressKey(data.module, item.name, item.path), kinds)
       return <button key={`${item.path}:${item.name}`} aria-pressed={item.is_target} className={`${buttonClass} text-left ${item.is_target ? 'ring-2 ring-slate-500' : ''}`} onClick={() => onSelect({ entity: item.name, module: data.module, path: item.path })}>
-        <span className="block break-all font-medium">{item.name}</span><span className="mt-1 block text-slate-500">已读 {count}/{kinds.length} 步{item.is_target ? ' · 当前算法' : ''}</span>
+        <span className="block break-all font-medium">{item.name}</span><span className="mt-1 block text-slate-500">Read {count}/{kinds.length} steps{item.is_target ? ' · Current algorithm' : ''}</span>
       </button>
     })}</div>
   </>
@@ -135,7 +135,7 @@ function PathPanel({ algo, onSelect }: { algo: AlgorithmResult; onSelect: (algor
 function RelatedFunctionsPanel({ algo }: { algo: AlgorithmResult }) {
   const functions = (algo.functions || []).map(item => typeof item === 'string' ? { name: item } : item)
   return <>
-    <Notice>查看该算法的成员函数及实现。</Notice>
+    <Notice>View the member functions and implementations of this algorithm.</Notice>
     <div className="mt-5 space-y-3">{functions.map((member: MemberFunction, index) => <details key={`${index}:${member.name}`} className="rounded-xl border border-slate-200 bg-white/55 p-4">
       <summary className="cursor-pointer break-all font-mono text-sm">{member.name}</summary>
       <p className={`mt-3 whitespace-pre-wrap ${mutedClass}`}>{member.meaning || 'No function documentation is indexed.'}</p>
@@ -146,7 +146,7 @@ function RelatedFunctionsPanel({ algo }: { algo: AlgorithmResult }) {
 
 function CallGraphPanel({ algo }: { algo: AlgorithmResult }) {
   const resource = useLearnResource<CallGraph>(learnUrl('call_graph', algo))
-  if (resource.error) return <LoadError message={`调用图加载失败：${resource.error}`} retry={resource.retry} retryable={resource.retryable} />
+  if (resource.error) return <LoadError message={`Call graph failed to load: ${resource.error}`} retry={resource.retry} retryable={resource.retryable} />
   if (!resource.data) return <Notice>Loading indexed call relationships…</Notice>
   const data = resource.data
   if (!data.nodes.length) return <Notice>{data.message || 'No indexed call relationships are available.'}</Notice>
@@ -157,8 +157,8 @@ function CallGraphPanel({ algo }: { algo: AlgorithmResult }) {
   }))
   const height = Math.max(160, ...Array.from(positions.values()).map(position => position.y + 100))
   return <>
-    <Notice>根据源码静态解析生成，部分调用可能无法解析。</Notice>
-    <details className="mt-3 text-sm text-slate-500"><summary className="cursor-pointer">调用图说明</summary><p className="mt-2 leading-6">根据 AST 中的调用符号，优先匹配同文件、同模块和同类中的对象。这不是运行时追踪；有歧义的调用不连线，未解析的符号列在图下方。</p></details>
+    <Notice>Generated by static analysis of the source; some calls may not be resolved.</Notice>
+    <details className="mt-3 text-sm text-slate-500"><summary className="cursor-pointer">About this call graph</summary><p className="mt-2 leading-6">Based on call symbols in the AST, matching objects in the same file, module, and class first. This is not runtime tracing; ambiguous calls are not connected, and unresolved symbols are listed below the graph.</p></details>
     <div className="mt-4 overflow-auto rounded-xl border border-slate-200 bg-white/40"><svg viewBox={`0 0 960 ${height}`} className="min-w-[800px] w-full" role="img" aria-label={`Indexed calls for ${algorithmName(algo)}`}>
       <defs><marker id="indexed-call-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#64748b" /></marker></defs>
       {data.edges.map((edge, index) => {
@@ -174,31 +174,31 @@ function CallGraphPanel({ algo }: { algo: AlgorithmResult }) {
       })}
     </svg></div>
     {!data.edges.length && <p className={`mt-3 ${mutedClass}`}>No unambiguous indexed edges were found; no illustrative edges have been added.</p>}
-    <Heading>Unresolved call symbols · 未解析的调用</Heading><TextList items={data.unresolved_calls} empty="No unresolved symbols were reported." />
+    <Heading>Unresolved call symbols</Heading><TextList items={data.unresolved_calls} empty="No unresolved symbols were reported." />
   </>
 }
 
 function ComparePanel({ algo }: { algo: AlgorithmResult }) {
   const resource = useLearnResource<{ algorithms: AlgorithmResult[] }>(learnUrl('compare', algo))
   const [peerKey, setPeerKey] = useState('')
-  if (resource.error) return <LoadError message={`同模块算法加载失败：${resource.error}`} retry={resource.retry} retryable={resource.retryable} />
+  if (resource.error) return <LoadError message={`Same-module algorithms failed to load: ${resource.error}`} retry={resource.retry} retryable={resource.retryable} />
   if (!resource.data) return <Notice>Loading algorithms from the selected module…</Notice>
   const keyOf = (item: AlgorithmResult) => progressKey(item.module || '', algorithmName(item), item.path || '')
   const peers = resource.data.algorithms.filter(item => keyOf(item) !== keyOf(algo))
   const peer = peers.find(item => keyOf(item) === peerKey) || peers[0]
   if (!peer) return <Notice>No other algorithm classes are indexed in this module.</Notice>
   const rows: Array<[string, (item: AlgorithmResult) => string]> = [
-    ['Module · 模块', item => item.module || '—'], ['Family · 算法族', item => item.family || '—'],
-    ['Task · 任务', item => item.task || '—'], ['Mathematical methods · 数学标签', item => item.math_methods?.join(', ') || '—'],
-    ['Parameters · 参数', item => item.params?.join(', ') || '—'],
-    ['Mathematical description · 数学说明', item => item.docstring_math?.trim() || '未收录 / Not indexed'],
-    ['References · 参考文献', item => item.references?.filter(value => value.trim()).join('\n') || '未收录 / Not indexed'],
-    ['Heuristic source score · 源码启发式指标（非 Big-O）', item => item.complexity == null ? '—' : String(item.complexity)],
-    ['Source · 源码', item => `${item.path || '—'}:${item.lines || '—'}`],
+    ['Module', item => item.module || '—'], ['Family', item => item.family || '—'],
+    ['Task', item => item.task || '—'], ['Mathematical methods', item => item.math_methods?.join(', ') || '—'],
+    ['Parameters', item => item.params?.join(', ') || '—'],
+    ['Mathematical description', item => item.docstring_math?.trim() || 'Not indexed'],
+    ['References', item => item.references?.filter(value => value.trim()).join('\n') || 'Not indexed'],
+    ['Heuristic source score (not Big-O)', item => item.complexity == null ? '—' : String(item.complexity)],
+    ['Source', item => `${item.path || '—'}:${item.lines || '—'}`],
   ]
   return <>
-    <label className="flex flex-wrap items-center gap-3 text-sm">Compare with · 选择同模块算法<select className={buttonClass} value={keyOf(peer)} onChange={event => setPeerKey(event.target.value)}>{peers.map(item => <option key={keyOf(item)} value={keyOf(item)}>{algorithmName(item)}</option>)}</select></label>
-    <p className={`my-4 ${mutedClass}`}>比较两个算法的参数、数学方法、数学说明、参考文献与源码信息。未提供的数学说明和参考文献标注为“未收录”。</p>
+    <label className="flex flex-wrap items-center gap-3 text-sm">Compare with <select className={buttonClass} value={keyOf(peer)} onChange={event => setPeerKey(event.target.value)}>{peers.map(item => <option key={keyOf(item)} value={keyOf(item)}>{algorithmName(item)}</option>)}</select></label>
+    <p className={`my-4 ${mutedClass}`}>Compare the parameters, math methods, math descriptions, references, and source information of two algorithms. Missing math descriptions and references are marked as "Not indexed".</p>
     <div className="overflow-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="border-b border-slate-300"><th className="p-3">Feature</th><th className="p-3">{algorithmName(algo)}</th><th className="p-3">{algorithmName(peer)}</th></tr></thead>
       <tbody>{rows.map(([label, value]) => <tr className="border-b border-slate-200 align-top" key={label}><th scope="row" className="p-3 font-normal text-slate-500">{label}</th><td className="max-w-xs whitespace-pre-wrap break-words p-3">{value(algo)}</td><td className="max-w-xs whitespace-pre-wrap break-words p-3">{value(peer)}</td></tr>)}</tbody></table></div>
   </>
@@ -207,16 +207,16 @@ function ComparePanel({ algo }: { algo: AlgorithmResult }) {
 function ComplexityPanel({ algo }: { algo: AlgorithmResult }) {
   const signals = algo.source_signals
   return <>
-    <Notice>源码结构指标，仅供阅读参考，不代表时间或空间复杂度。</Notice>
-    <Heading>Heuristic source score · 源码启发式指标</Heading>
+    <Notice>Source-structure metrics, for reading reference only; they do not represent time or space complexity.</Notice>
+    <Heading>Heuristic source score</Heading>
     <p className="text-3xl font-semibold">{algo.complexity ?? 'Not indexed'}</p>
-    <details className={`mt-3 ${mutedClass}`}><summary className="cursor-pointer">指标说明</summary><p className="mt-2">计算方式：分支、循环和推导式节点数 + 源码行数 ÷ 10。该值不是标准圈复杂度，也不是 Big-O；判断运行开销还需结合输入维度、循环边界和库函数成本。</p></details>
-    <Heading>AST evidence · 静态结构</Heading>
+    <details className={`mt-3 ${mutedClass}`}><summary className="cursor-pointer">About these metrics</summary><p className="mt-2">Computed as: branch, loop, and comprehension node counts + source lines / 10. This value is neither standard cyclomatic complexity nor Big-O; judging runtime cost also requires input dimensions, loop bounds, and library-function costs.</p></details>
+    <Heading>AST evidence</Heading>
     {signals ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3">{[
       ['Source lines', signals.lines], ['For loops', signals.for_loops], ['While loops', signals.while_loops],
       ['Comprehensions', signals.comprehensions], ['If branches', signals.branches], ['Matrix @ operators', signals.matrix_operators],
     ].map(([label, value]) => <div className="rounded-xl border border-slate-200 bg-white/60 p-4" key={label}><span className="text-xs text-slate-500">{label}</span><p className="mt-1 text-2xl">{value}</p></div>)}</div> : <Notice>Source could not be parsed, so structural counts are unavailable.</Notice>}
-    <Heading>Before claiming Big-O · 进一步核对</Heading><TextList items={['确认样本数、特征数、迭代次数等输入维度。', '检查嵌套循环的边界与提前退出条件。', '核对矩阵运算和外部函数的实际成本、临时数组及数据复制。']} />
+    <Heading>Before claiming Big-O</Heading><TextList items={['Confirm input dimensions such as sample count, feature count, and iteration count.', 'Check the bounds and early-exit conditions of nested loops.', 'Verify the actual costs of matrix operations and external functions, temporary arrays, and data copies.']} />
   </>
 }
 
@@ -224,11 +224,11 @@ function QuizPanel({ algo }: { algo: AlgorithmResult }) {
   const [resetVersion, setResetVersion] = useState(0)
   const questions = algo.quiz || []
   return <>
-    {questions.length === 0 && <Notice>当前算法没有足够的源码或元数据，暂不能生成可信题目。</Notice>}
+    {questions.length === 0 && <Notice>There is not enough source or metadata for this algorithm to generate reliable questions.</Notice>}
     <div key={resetVersion} className="my-5 space-y-3">{questions.map((question, index) => <details key={question.question} className="rounded-xl border border-slate-200 bg-white/60 p-4">
-      <summary className="cursor-pointer text-sm font-medium">Q{index + 1}. {question.question}</summary><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-600">{question.answer}</p><pre className="mt-3 whitespace-pre-wrap break-words text-xs text-slate-500">依据：{question.evidence}</pre>
+      <summary className="cursor-pointer text-sm font-medium">Q{index + 1}. {question.question}</summary><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-600">{question.answer}</p><pre className="mt-3 whitespace-pre-wrap break-words text-xs text-slate-500">Evidence: {question.evidence}</pre>
     </details>)}</div>
-    <button className={buttonClass} onClick={() => setResetVersion(version => version + 1)}>Hide all answers · 收起全部答案</button>
+    <button className={buttonClass} onClick={() => setResetVersion(version => version + 1)}>Hide all answers</button>
   </>
 }
 
@@ -249,19 +249,19 @@ function RecommendPanel({ algo, onSelect }: { algo: AlgorithmResult; onSelect: (
   return <>
     {state.error && <LoadError message={state.error} retryable={state.retryable} retry={() => setAttempt(value => value + 1)} />}
     {!state.items && !state.error && <Notice>Finding related algorithms…</Notice>}
-    {state.items?.length === 0 && <Notice>没有找到其他相似算法。</Notice>}
+    {state.items?.length === 0 && <Notice>No other similar algorithms were found.</Notice>}
     <div className="mt-5 grid gap-4 sm:grid-cols-2">{state.items?.map(item => <article className="rounded-xl border border-slate-200 bg-white/60 p-4" key={`${item.module}:${item.path}:${algorithmName(item)}`}>
       <h4 className="break-words font-semibold">{algorithmName(item)}</h4><p className={mutedClass}>{item.module} · {item.task}</p>
-      <p className="my-3 text-sm">排序分：{recommendationScore(algo, item).toFixed(3)} · {Number.isFinite(item.semantic) ? `语义分：${item.semantic!.toFixed(3)}` : '语义分未提供'}</p>
-      <p className="mb-3 text-sm">推荐依据：{recommendationReasons(algo, item).join(' · ')}</p>
-      <button className={buttonClass} onClick={() => onSelect(item)}>学习 {algorithmName(item)}</button>
+      <p className="my-3 text-sm">Ranking score: {recommendationScore(algo, item).toFixed(3)} · {Number.isFinite(item.semantic) ? `Semantic score: ${item.semantic!.toFixed(3)}` : 'Semantic score unavailable'}</p>
+      <p className="mb-3 text-sm">Why recommended: {recommendationReasons(algo, item).join(' · ')}</p>
+      <button className={buttonClass} onClick={() => onSelect(item)}>Study {algorithmName(item)}</button>
     </article>)}</div>
   </>
 }
 
 export default function ModePanel({ mode, algorithm, onSelect, onOpenRecommendation }: { mode: LearnMode; algorithm: AlgorithmResult; onSelect: (algorithm: AlgorithmResult) => void; onOpenRecommendation: (algorithm: AlgorithmResult) => void }) {
   const resource = useLearnResource<{ algorithm: AlgorithmResult | null }>(learnUrl('algorithm', algorithm))
-  if (resource.error) return <Shell><LoadError message={`算法详情加载失败：${resource.error}`} retry={resource.retry} retryable={resource.retryable} /></Shell>
+  if (resource.error) return <Shell><LoadError message={`Algorithm details failed to load: ${resource.error}`} retry={resource.retry} retryable={resource.retryable} /></Shell>
   if (!resource.data) return <Shell><Notice>Loading indexed algorithm details…</Notice></Shell>
   if (!resource.data.algorithm) return <Shell><Notice>The selected algorithm is not present in this index. Return to Browse to select another.</Notice></Shell>
   const algo = resource.data.algorithm

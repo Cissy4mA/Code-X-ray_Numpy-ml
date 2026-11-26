@@ -32,12 +32,12 @@ export function recommendationReasons(base: AlgorithmResult, candidate: Algorith
   const directory = (algorithm: AlgorithmResult) => String(algorithm.path || algorithm.module || '').replace(/\\/g, '/').split('/').slice(0, -1).join('/')
   const baseDirectory = directory(base)
   const candidateDirectory = directory(candidate)
-  if (baseDirectory && candidateDirectory && baseDirectory === candidateDirectory) reasons.push('same module / 同模块')
-  if (base.family && candidate.family && String(base.family).toLowerCase() === String(candidate.family).toLowerCase() && String(base.family).toLowerCase() !== 'other') reasons.push('same family / 同算法族')
-  if (base.task && candidate.task && String(base.task).toLowerCase() === String(candidate.task).toLowerCase()) reasons.push('same task / 同任务')
+  if (baseDirectory && candidateDirectory && baseDirectory === candidateDirectory) reasons.push('same module')
+  if (base.family && candidate.family && String(base.family).toLowerCase() === String(candidate.family).toLowerCase() && String(base.family).toLowerCase() !== 'other') reasons.push('same family')
+  if (base.task && candidate.task && String(base.task).toLowerCase() === String(candidate.task).toLowerCase()) reasons.push('same task')
   const shared = methods(base).filter(method => methods(candidate).includes(method))
-  if (shared.length) reasons.push(`shared math: ${shared.slice(0, 3).join(', ')} / 共同数学方法`)
-  if (!reasons.length) reasons.push('semantic/source-code similarity / 语义或源码相似')
+  if (shared.length) reasons.push(`shared math: ${shared.slice(0, 3).join(', ')}`)
+  if (!reasons.length) reasons.push('semantic/source-code similarity')
   return reasons
 }
 

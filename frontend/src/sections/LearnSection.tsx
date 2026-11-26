@@ -110,11 +110,11 @@ export default function LearnSection() {
           style={{ letterSpacing: '-0.03em' }}
         >
           Learn <span style={{ color: 'rgba(28,36,52,0.35)' }}>/</span>{' '}
-          <span style={{ color: 'rgba(28,36,52,0.62)' }}>学习</span>
+          <span style={{ color: 'rgba(28,36,52,0.62)' }}>Learn</span>
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed" style={{ color: 'rgba(28,36,52,0.62)' }}>
-          拖动卡盘、点击卡牌，或用 <kbd className="rounded border border-[rgba(20,28,40,0.14)] bg-white/70 px-1.5 py-0.5 font-mono text-[11px] text-[#1c2434]">←</kbd>{' '}
-          <kbd className="rounded border border-[rgba(20,28,40,0.14)] bg-white/70 px-1.5 py-0.5 font-mono text-[11px] text-[#1c2434]">→</kbd> 切换 {MODES.length} 种学习模式。
+          Drag the deck, click a card, or use <kbd className="rounded border border-[rgba(20,28,40,0.14)] bg-white/70 px-1.5 py-0.5 font-mono text-[11px] text-[#1c2434]">←</kbd>{' '}
+          <kbd className="rounded border border-[rgba(20,28,40,0.14)] bg-white/70 px-1.5 py-0.5 font-mono text-[11px] text-[#1c2434]">→</kbd> to switch between {MODES.length} learning modes.
           <span className="block" style={{ color: 'rgba(28,36,52,0.42)' }}>
             Explore {MODES.length} learning modes. Reading progress is saved on this browser; automatic rotation is off by default.
           </span>
@@ -148,10 +148,10 @@ export default function LearnSection() {
               No Algorithm Selected
             </p>
             <h3 className="mt-3 text-2xl font-semibold tracking-tight text-[#1c2434]">
-              先搜索一个算法，再打开学习卡片
+              Search for an algorithm first, then open the learning cards
             </h3>
             <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed" style={{ color: 'rgba(28,36,52,0.62)' }}>
-              在 Browse 中找到算法后，点击 Open the Learn Page 开始阅读。
+              After finding an algorithm in Browse, click Open the Learn Page to start reading.
             </p>
             <a
               href="#search"
